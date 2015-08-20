@@ -274,7 +274,7 @@
 	Grass.prototype = Object.create(Entity.prototype);
 	Grass.prototype.constructor = Grass;
 
-	/* Diamond
+	/* Emerald
 	 ===============================================================*/
 	function Emerald(g, x, y){
 		Entity.prototype.constructor.call(this, g, new Gfx(g.sprite, 0, 16, 16, 16), x, y, TILE_SIZE, TILE_SIZE);
@@ -293,7 +293,15 @@
 	Explosion.prototype = Object.create(Entity.prototype);
 	Explosion.prototype.constructor = Explosion;
 
-
+	/* Dummy
+	 ===============================================================*/
+	function Dummy(ref) {
+		Entity.prototype.constructor.call(this, ref.game, null, ref.x, ref.y, TILE_SIZE, TILE_SIZE);
+		this.isWalkable = ref.isWalkable;
+		this.ref = ref;
+	}
+	Dummy.prototype = Object.create(Entity.prototype);
+	Dummy.prototype.constructor = Dummy;
 
 
 
@@ -382,9 +390,9 @@
 			}
 		},
 		getElementAtPos: function(x, y) {
-			//var idx = y*MAP_SIZE_X+x;
-			//return this.elements[idx];
-			//
+			var idx = y*MAP_SIZE_X+x;
+			return this.elements[idx];
+			/*
 			var foundItem = null;
 			this.elements.forEach(function(item, idx, arr) {
 				if ( item === null ) {
@@ -398,6 +406,7 @@
 				}
 			});
 			return foundItem;
+			*/
 		},
 
 		drawBackground: function() {
@@ -437,98 +446,136 @@
 
 
 			var currentTime = new Date().getTime();
-			if ( currentTime - self.lastUpdate > 1000/60 ) {
+			if ( currentTime - self.lastUpdate <= 1000/60 ) {
+				return;
+			}
 
 
-				self.lastUpdate = currentTime;
 
 
-				// Update all explosions (may trigger new explosions
+			self.lastUpdate = currentTime;
+			// Update all explosions (may trigger new explosions
 
-				var newPendingExplosions = [];
-				self.pendingExplodePositions.forEach(function(item, idx, arr) {
-					for ( var y = item.y-1; y <= item.y+1; y++ ) {
-						for ( var x = item.x-1; x <= item.x+1; x++ ) {
-							// check if we hit a bomb, if yes, explode them too
-							var elIndex = y*MAP_SIZE_X+x;
-							if ( self.elements[elIndex] === null ) {
+			var newPendingExplosions = [];
+			self.pendingExplodePositions.forEach(function(item, idx, arr) {
+				for ( var y = item.y-1; y <= item.y+1; y++ ) {
+					for ( var x = item.x-1; x <= item.x+1; x++ ) {
+						// check if we hit a bomb, if yes, explode them too
+						var elIndex = y*MAP_SIZE_X+x;
 
-							} else if ( self.elements[elIndex] instanceof Bomb ) {
+
+						var el = self.elements[elIndex];
+						if ( el instanceof Dummy ) {
+							el = el.ref;
+							if ( el instanceof Bomb ) {
 								newPendingExplosions.push({x:x, y:y});
 							}
-							self.setElementAtIndex(y*MAP_SIZE_X+x, new Explosion(self, x*TILE_SIZE, y*TILE_SIZE));
+							// delete original element
+							var pos = el.translatePos();
+							self.deleteElementAtIndex(pos.y*MAP_SIZE_X+pos.x);
+							if ( self.elements.length < elIndex ) {
+								self.setElementAtIndex(elIndex, new Explosion(self, x*TILE_SIZE, y*TILE_SIZE));
+							}
+						} else {
+							if ( el === null ) {
+
+							} else if ( el instanceof Bomb ) {
+								newPendingExplosions.push({x:x, y:y});
+							}
+							if ( self.elements.length < elIndex ) {
+								self.setElementAtIndex(elIndex, new Explosion(self, x*TILE_SIZE, y*TILE_SIZE));
+							}
 						}
 					}
-				});
-				self.pendingExplodePositions = newPendingExplosions;
+				}
+			});
+			self.pendingExplodePositions = newPendingExplosions;
 
 
 
 
-				// update all elements ( they might start or stop falling )
-				var playerPosBefore = self.player.translatePos();
-				self.elements.forEach(function(item, idx, arr) {
-					if ( item === null ) {
+			// update all elements ( they might start or stop falling )
+			var playerPosBefore = self.player.translatePos();
+			self.elements.forEach(function(item, idx, arr) {
+				if ( item === null ) {
+					return;
+				}
+				if ( item instanceof Explosion ) {
+					item.ticktick--;
+					if ( item.ticktick === 0 ) {
+						self.deleteElementAtIndex(idx);
 						return;
 					}
-					if ( item instanceof Explosion ) {
-						item.ticktick--;
-						if ( item.ticktick === 0 ) {
-							delete arr[idx];
-							arr[idx] = null;
-							return;
-						}
-					}
-					var pos = item.translatePos();
-					if ( item instanceof Stone || item instanceof Bomb ) {
-						// get element below the stone:
-						var elBelow = self.elements[(pos.y+1)*MAP_SIZE_X+pos.x];
-						if ( elBelow === null
-							&& item.substep === 0
-							&& ( !(playerPosBefore.x === pos.x && playerPosBefore.y === pos.y+1) || item.wasFalling )
-						) {
-							// let the stone fall down
-							item.dirY = 1;
-							item.dirX = 0;
-							item.isFalling = true;
-							item.wasFalling = false;
-						} else if ( (elBelow instanceof Stone || elBelow instanceof Bomb) && item.substep === 0 ) {
+				}
+				var pos = item.translatePos();
+				if ( item instanceof Stone || item instanceof Bomb ) {
+					// get element below the stone:
+					var elBelow = self.elements[(pos.y+1)*MAP_SIZE_X+pos.x];
+					if ( elBelow === null
+						&& item.substep === 0
+						&& ( !(playerPosBefore.x === pos.x && playerPosBefore.y === pos.y+1) || item.wasFalling )
+					) {
+						// let the stone fall down
+						item.dirY = 1;
+						item.dirX = 0;
+						item.isFalling = true;
+						item.wasFalling = false;
+						self.elements[(pos.y+1)*MAP_SIZE_X+pos.x] = new Dummy(item); // item will fall there eventually!
 
-							var elLeft = self.getElementAtPos(pos.x-1, pos.y);
-							var elLeftBelow = self.getElementAtPos(pos.x-1, pos.y+1);
-							if ( elLeft === null
-								&& elLeftBelow === null
-								&& !(playerPosBefore.x === pos.x-1 && playerPosBefore.y === pos.y)
-								&& !(playerPosBefore.x === pos.x-1 && playerPosBefore.y === pos.y+1)
+					} else if ( (elBelow instanceof Stone || elBelow instanceof Bomb) && item.substep === 0 ) {
+
+						var elLeft = self.getElementAtPos(pos.x-1, pos.y);
+						var elLeftBelow = self.getElementAtPos(pos.x-1, pos.y+1);
+						if ( elLeft === null
+							&& elLeftBelow === null
+							&& !(playerPosBefore.x === pos.x-1 && playerPosBefore.y === pos.y)
+							&& !(playerPosBefore.x === pos.x-1 && playerPosBefore.y === pos.y+1)
+							) {
+							item.dirX = -1;
+							item.dirY = 0;
+							self.elements[(pos.y)*MAP_SIZE_X+(pos.x-1)] = new Dummy(item); // item will fall there eventually!
+						} else {
+							var elRight =  self.getElementAtPos(pos.x+1, pos.y);
+							var elRightBelow = self.getElementAtPos(pos.x+1, pos.y+1);
+							if ( elRight === null
+								&& elRightBelow === null
+								&& !(playerPosBefore.x === pos.x+1 && playerPosBefore.y === pos.y)
+								&& !(playerPosBefore.x === pos.x+1 && playerPosBefore.y === pos.y+1)
 								) {
-								item.dirX = -1;
+								item.dirX = 1;
 								item.dirY = 0;
-							} else {
-								var elRight =  self.getElementAtPos(pos.x+1, pos.y+1);
-								var elRightBelow = self.getElementAtPos(pos.x+1, pos.y+1);
-								if ( elRight === null
-									&& elRightBelow === null
-									&& !(playerPosBefore.x === pos.x+1 && playerPosBefore.y === pos.y)
-									&& !(playerPosBefore.x === pos.x+1 && playerPosBefore.y === pos.y+1)
-									) {
-									item.dirX = 1;
-									item.dirY = 0;
-								}
+								self.elements[(pos.y)*MAP_SIZE_X+(pos.x+1)] = new Dummy(item); // item will fall there eventually!
 							}
-
 						}
+
 					}
+				}
 
-					if ( item instanceof Bomb && item.wasFalling ) {
-						// create Explosion!
-						for ( var y = pos.y-1; y <= pos.y+1; y++ ) {
-							for ( var x = pos.x-1; x <= pos.x+1; x++ ) {
-								// check if we hit a bomb, if yes, explode them too
-								var elIndex = y*MAP_SIZE_X+x;
-								if ( self.elements[elIndex] === null ) {
+				if ( item instanceof Bomb && item.wasFalling ) {
+					// create Explosion!
+					for ( var y = pos.y-1; y <= pos.y+1; y++ ) {
+						for ( var x = pos.x-1; x <= pos.x+1; x++ ) {
+							// check if we hit a bomb, if yes, explode them too
 
-								} else if ( self.elements[elIndex] instanceof Bomb ) {
-									self.pendingExplodePositions.push({x:x, y:y});
+
+							var elIndex = y*MAP_SIZE_X+x;
+							var el = self.elements[elIndex];
+							if ( el instanceof Dummy ) {
+								el = el.ref;
+								if ( el instanceof Bomb ) {
+									newPendingExplosions.push({x:x, y:y});
+								}
+								// delete original element
+								var pos = el.translatePos();
+								self.deleteElementAtIndex(pos.y*MAP_SIZE_X+pos.x);
+								if ( self.elements.length < elIndex ) {
+									self.setElementAtIndex(elIndex, new Explosion(self, x*TILE_SIZE, y*TILE_SIZE));
+								}
+							} else {
+								if ( el === null ) {
+
+								} else if ( el instanceof Bomb ) {
+									newPendingExplosions.push({x:x, y:y});
 								}
 								if ( self.elements.length < elIndex ) {
 									self.setElementAtIndex(elIndex, new Explosion(self, x*TILE_SIZE, y*TILE_SIZE));
@@ -536,123 +583,120 @@
 							}
 						}
 					}
-					if (item.wasFalling) {
-						item.wasFalling = false;
-					}
-				});
+				}
+				if (item.wasFalling) {
+					item.wasFalling = false;
+				}
+			});
 
-				self.elements.forEach(function(item, idx, arr) {
-					if ( item === null ) {
-						return;
-					}
-					if ( item.dirX === 0 && item.dirY === 0 ) {
-						return;
-					}
-
-					item.move();
-					item.substep++;
-					if ( item.substep >= item.stepsPerTile ) {
-						item.substep = 0;
-						item.dirX = 0;
-						item.dirY = 0;
-
-						// stop falling
-						if ( item instanceof Stone || item instanceof Bomb ) {
-							if ( item.isFalling ) {
-								item.isFalling = false;
-								item.wasFalling = true;
-							}
-						}
-						var pos = item.translatePos();
-						var elIdx = pos.y*MAP_SIZE_X+pos.x;
-
-						self.deleteElementAtIndex(idx);
-						self.setElementAtIndex(elIdx, item);
-
-					}
-				});
-
-
-
-
-				// check if at the position is something and that something is not already moving
-				if ( self.player.dirX !== 0 || self.player.dirY !== 0 ) {
-					self.player.move();
-
-					// player moves each field in 8 steps
-					self.player.substep++;
-					if ( self.player.substep >= self.player.stepsPerTile ) {
-						self.player.substep = 0;
-					}
+			self.elements.forEach(function(item, idx, arr) {
+				if ( item === null ) {
+					return;
+				}
+				if ( item.dirX === 0 && item.dirY === 0 ) {
+					return;
 				}
 
-				// player started moving. check if some other elements must move and check if the player can even move!
-				if ( self.player.substep === 1 ) {
+				item.move();
+				item.substep++;
+				if ( item.substep >= item.stepsPerTile ) {
+					item.substep = 0;
+					item.dirX = 0;
+					item.dirY = 0;
 
-					var unmove = false;
-					if ( self.player.dirX !== 0 ) {
-						// moving horizontally
-						var nextEl= self.elements[playerPosBefore.y*MAP_SIZE_X+(playerPosBefore.x+self.player.dirX)];
-						var nextNextEl = self.elements[playerPosBefore.y*MAP_SIZE_X+(playerPosBefore.x+self.player.dirX+self.player.dirX)];
-
-						// do we have to unmove the player?
-						if ( typeof nextEl === 'undefined' ) {
-							unmove = true;
-						} else if ( nextEl === null || nextEl.isWalkable ) {
-							// ok
-						} else if ( nextEl.isPushable ) {
-							// dont know yet, maybe the stone/bomb can be pushed
-							if ( nextNextEl === null ) {
-								// ok
-								if ( nextEl.dirX === 0 && nextEl.dirY === 0 ) {
-									nextEl.dirX = self.player.dirX;
-								}
-							} else {
-								unmove = true;
-							}
-						} else {
-							unmove = true;
-						}
-					} else if ( self.player.dirY !== 0 ) {
-						// moving vertically
-						var nextEl= self.elements[(playerPosBefore.y+self.player.dirY)*MAP_SIZE_X+playerPosBefore.x];
-						//var nextNextEl = self.elements[(playerPosBefore.y+self.player.dirY+self.player.dirY)*MAP_SIZE_X+playerPosBefore.x];
-
-						// do we have to unmove the player?
-						if ( typeof nextEl === 'undefined' ) {
-							unmove = true;
-						} else if ( nextEl === null || nextEl.isWalkable ) {
-							// ok
-						} else {
-							unmove = true;
+					// stop falling
+					if ( item instanceof Stone || item instanceof Bomb ) {
+						if ( item.isFalling ) {
+							item.isFalling = false;
+							item.wasFalling = true;
 						}
 					}
-					if ( unmove ) {
-						// just dont move..
-						self.player.unmove();
-						self.player.substep = 0;
-					}
+					var pos = item.translatePos();
+					var elIdx = pos.y*MAP_SIZE_X+pos.x;
+
+					self.deleteElementAtIndex(idx);
+					self.setElementAtIndex(elIdx, item);
+
 				}
+			});
 
 
-				// player pos to index:
-				var playerPosAfter = self.player.translatePos();
 
-				var elIndex = playerPosAfter.y*MAP_SIZE_X+playerPosAfter.x;
-				var elAtPlayer = self.elements[elIndex];
-				if ( elAtPlayer instanceof Grass ) {
-					self.deleteElementAtIndex(elIndex);
-					console.log('ate some grass');
-				} else if ( elAtPlayer instanceof Emerald ) {
 
-					self.deleteElementAtIndex(elIndex);
-					self.player.emeraldCount++;
-					console.log('got an emerald');
+			// check if at the position is something and that something is not already moving
+			if ( self.player.dirX !== 0 || self.player.dirY !== 0 ) {
+				self.player.move();
+
+				// player moves each field in 8 steps
+				self.player.substep++;
+				if ( self.player.substep >= self.player.stepsPerTile ) {
+					self.player.substep = 0;
 				}
-
-
 			}
 
+			// player started moving. check if some other elements must move and check if the player can even move!
+			if ( self.player.substep === 1 ) {
+
+				var unmove = false;
+				if ( self.player.dirX !== 0 ) {
+					// moving horizontally
+					var nextEl= self.elements[playerPosBefore.y*MAP_SIZE_X+(playerPosBefore.x+self.player.dirX)];
+					var nextNextEl = self.elements[playerPosBefore.y*MAP_SIZE_X+(playerPosBefore.x+self.player.dirX+self.player.dirX)];
+
+					// do we have to unmove the player?
+					if ( typeof nextEl === 'undefined' ) {
+						unmove = true;
+					} else if ( nextEl === null || nextEl.isWalkable ) {
+						// ok
+					} else if ( nextEl.isPushable ) {
+						// dont know yet, maybe the stone/bomb can be pushed
+						if ( nextNextEl === null ) {
+							// ok
+							if ( nextEl.dirX === 0 && nextEl.dirY === 0 ) {
+								nextEl.dirX = self.player.dirX;
+							}
+						} else {
+							unmove = true;
+						}
+					} else {
+						unmove = true;
+					}
+				} else if ( self.player.dirY !== 0 ) {
+					// moving vertically
+					var nextEl= self.elements[(playerPosBefore.y+self.player.dirY)*MAP_SIZE_X+playerPosBefore.x];
+					//var nextNextEl = self.elements[(playerPosBefore.y+self.player.dirY+self.player.dirY)*MAP_SIZE_X+playerPosBefore.x];
+
+					// do we have to unmove the player?
+					if ( typeof nextEl === 'undefined' ) {
+						unmove = true;
+					} else if ( nextEl === null || nextEl.isWalkable ) {
+						// ok
+					} else {
+						unmove = true;
+					}
+				}
+				if ( unmove ) {
+					// just dont move..
+					self.player.unmove();
+					self.player.substep = 0;
+				}
+			}
+
+
+			// player pos to index:
+			var playerPosAfter = self.player.translatePos();
+
+			var elIndex = playerPosAfter.y*MAP_SIZE_X+playerPosAfter.x;
+			var elAtPlayer = self.elements[elIndex];
+			if ( elAtPlayer instanceof Grass ) {
+				self.deleteElementAtIndex(elIndex);
+				console.log('ate some grass');
+			} else if ( elAtPlayer instanceof Emerald ) {
+
+				self.deleteElementAtIndex(elIndex);
+				self.player.emeraldCount++;
+				console.log('got an emerald');
+			}
 
 
 		},
@@ -683,6 +727,10 @@
 					return;
 				}
 				if ( item.y < self.renderStartY-TILE_SIZE || item.y > self.renderStartY+VISIBLE_HEIGHT*TILE_SIZE + TILE_SIZE ) {
+					return;
+				}
+
+				if ( ! item.gfx ) {
 					return;
 				}
 
