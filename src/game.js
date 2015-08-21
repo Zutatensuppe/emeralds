@@ -462,8 +462,6 @@
 					for ( var x = item.x-1; x <= item.x+1; x++ ) {
 						// check if we hit a bomb, if yes, explode them too
 						var elIndex = y*MAP_SIZE_X+x;
-
-
 						var el = self.elements[elIndex];
 						if ( el instanceof Dummy ) {
 							el = el.ref;
@@ -473,18 +471,14 @@
 							// delete original element
 							var pos = el.translatePos();
 							self.deleteElementAtIndex(pos.y*MAP_SIZE_X+pos.x);
-							if ( self.elements.length < elIndex ) {
-								self.setElementAtIndex(elIndex, new Explosion(self, x*TILE_SIZE, y*TILE_SIZE));
-							}
+							self.setElementAtIndex(elIndex, new Explosion(self, x*TILE_SIZE, y*TILE_SIZE));
 						} else {
 							if ( el === null ) {
 
 							} else if ( el instanceof Bomb ) {
 								newPendingExplosions.push({x:x, y:y});
 							}
-							if ( self.elements.length < elIndex ) {
-								self.setElementAtIndex(elIndex, new Explosion(self, x*TILE_SIZE, y*TILE_SIZE));
-							}
+							self.setElementAtIndex(elIndex, new Explosion(self, x*TILE_SIZE, y*TILE_SIZE));
 						}
 					}
 				}
@@ -520,9 +514,9 @@
 						item.dirX = 0;
 						item.isFalling = true;
 						item.wasFalling = false;
-						self.elements[(pos.y+1)*MAP_SIZE_X+pos.x] = new Dummy(item); // item will fall there eventually!
+						self.setElementAtIndex((pos.y+1)*MAP_SIZE_X+pos.x, new Dummy(item)); // item will fall there eventually!
 
-					} else if ( (elBelow instanceof Stone || elBelow instanceof Bomb) && item.substep === 0 ) {
+					} else if ( (elBelow instanceof Stone ) && item.substep === 0 ) {
 
 						var elLeft = self.getElementAtPos(pos.x-1, pos.y);
 						var elLeftBelow = self.getElementAtPos(pos.x-1, pos.y+1);
@@ -533,7 +527,7 @@
 							) {
 							item.dirX = -1;
 							item.dirY = 0;
-							self.elements[(pos.y)*MAP_SIZE_X+(pos.x-1)] = new Dummy(item); // item will fall there eventually!
+							self.setElementAtIndex((pos.y)*MAP_SIZE_X+(pos.x-1), new Dummy(item)); // item will fall there eventually!
 						} else {
 							var elRight =  self.getElementAtPos(pos.x+1, pos.y);
 							var elRightBelow = self.getElementAtPos(pos.x+1, pos.y+1);
@@ -544,7 +538,7 @@
 								) {
 								item.dirX = 1;
 								item.dirY = 0;
-								self.elements[(pos.y)*MAP_SIZE_X+(pos.x+1)] = new Dummy(item); // item will fall there eventually!
+								self.setElementAtIndex((pos.y)*MAP_SIZE_X+(pos.x+1), new Dummy(item)); // item will fall there eventually!
 							}
 						}
 
@@ -568,18 +562,14 @@
 								// delete original element
 								var pos = el.translatePos();
 								self.deleteElementAtIndex(pos.y*MAP_SIZE_X+pos.x);
-								if ( self.elements.length < elIndex ) {
-									self.setElementAtIndex(elIndex, new Explosion(self, x*TILE_SIZE, y*TILE_SIZE));
-								}
+								self.setElementAtIndex(elIndex, new Explosion(self, x*TILE_SIZE, y*TILE_SIZE));
 							} else {
 								if ( el === null ) {
 
 								} else if ( el instanceof Bomb ) {
 									newPendingExplosions.push({x:x, y:y});
 								}
-								if ( self.elements.length < elIndex ) {
-									self.setElementAtIndex(elIndex, new Explosion(self, x*TILE_SIZE, y*TILE_SIZE));
-								}
+								self.setElementAtIndex(elIndex, new Explosion(self, x*TILE_SIZE, y*TILE_SIZE));
 							}
 						}
 					}
