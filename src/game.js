@@ -190,7 +190,7 @@
 	}
 	Entity.prototype = {
 		constructor: Entity.prototype.constructor,
-		translatePos: function() {
+		getActualPosition: function() {
 			return {x: Math.round(this.x/TILE_SIZE, 10), y: Math.round(this.y/TILE_SIZE, 10)};
 		},
 		move: function() {
@@ -342,19 +342,65 @@
 		this.pendingExplodePositions = [];
 		this.elements = [];
 
-		for ( var j = 0; j < MAP_SIZE_Y; j++ ) {
-			for ( var i = 0; i < MAP_SIZE_X; i++ ) {
-				var rnd = Math.random();
-				if ( rnd > 0.9 ) {
-					this.elements.push(new Bomb(this, i*TILE_SIZE, j*TILE_SIZE));
-				} else if ( rnd > 0.8 ) {
-					this.elements.push(new Emerald(this, i*TILE_SIZE, j*TILE_SIZE));
-				} else if ( rnd > 0.7 ) {
-					this.elements.push(new Stone(this, i*TILE_SIZE, j*TILE_SIZE));
-				} else {
-					this.elements.push(new Grass(this, i*TILE_SIZE, j*TILE_SIZE));
+		var map = [
+			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
+			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
+			'g','g','b','b','b','g','b','g','g','g','b','b','b','g','b','g','b','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
+			'g','g','b','g','b','g','b','g','g','g','b','g','g','g','g','b','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
+			'g','g','b','b','b','g','b','g','g','g','b','b','b','g','g','b','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
+			'g','g','b','g','b','g','b','g','g','g','b','g','g','g','g','b','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
+			'g','g','b','g','b','g','b','b','b','g','b','b','b','g','b','g','b','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
+			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
+			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
+			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
+			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
+			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
+			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
+			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
+			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
+			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
+			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
+			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
+			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
+			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
+			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
+			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
+			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
+			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
+		];
+
+		if ( map ) {
+			for ( var i = 0; i < map.length; i++ ) {
+				var el = null;
+				var posX = (i%MAP_SIZE_X) * TILE_SIZE;
+				var posY = parseInt(i/MAP_SIZE_X, 10) * TILE_SIZE;
+				switch ( map[i] ) {
+					case 'g': el = new Grass(this, posX, posY); break;
+					case 'b': el = new Bomb(this, posX, posY); break;
+					case 's': el = new Stone(this, posX, posY); break;
+					case 'e': el = new Emerald(this, posX, posY); break;
+					default: break;
+				}
+				this.elements[i] = el;
+			}
+
+		} else {
+
+			for ( var j = 0; j < MAP_SIZE_Y; j++ ) {
+				for ( var i = 0; i < MAP_SIZE_X; i++ ) {
+					var rnd = Math.random();
+					if ( rnd > 0.9 ) {
+						this.elements.push(new Bomb(this, i*TILE_SIZE, j*TILE_SIZE));
+					} else if ( rnd > 0.8 ) {
+						this.elements.push(new Emerald(this, i*TILE_SIZE, j*TILE_SIZE));
+					} else if ( rnd > 0.7 ) {
+						this.elements.push(new Stone(this, i*TILE_SIZE, j*TILE_SIZE));
+					} else {
+						this.elements.push(new Grass(this, i*TILE_SIZE, j*TILE_SIZE));
+					}
 				}
 			}
+
 		}
 
 		this.player = new Player(this, 0*TILE_SIZE, 0*TILE_SIZE);
@@ -441,6 +487,93 @@
 			}
 
 		},
+
+		maybeCreateExplosion: function(px, py) {
+
+
+			var self = this;
+
+			// check if we hit a bomb, if yes, explode them too
+			//var elIndex = y*MAP_SIZE_X+x;
+
+			var el = self.getElementAtPos(px,py);
+
+			if ( typeof el === 'undefined' ) {
+				return;
+			}
+			// if there is already an explosion, continue
+			if ( el instanceof Explosion ) {
+				return;
+			}
+
+			// if a dummy, then look inside
+			if ( el instanceof Dummy ) {
+				var innerEl = el.ref;
+				if ( innerEl instanceof Explosion ) {
+					// should not happen, but if, then continue
+					return;
+				}
+
+				// if there is a bomb, then create an explosion at the position where the thing will be falling to
+				if ( innerEl instanceof Bomb ) {
+					self.createExplosion(px, py);
+				} else {
+
+					if ( innerEl !== null ) {
+						// delete original element
+						var pos = innerEl.getActualPosition();
+						self.deleteElementAtIndex(pos.y*MAP_SIZE_X+pos.x);
+					}
+				}
+
+			} else {
+
+				// it is not a dummy
+
+				// if there is a bomb, then create an explosion at the position where the thing will be falling to
+				if ( el instanceof Bomb ) {
+
+					self.createExplosion(px, py);
+				} else {
+
+					if ( el !== null ) {
+						// delete original element
+						var pos = el.getActualPosition();
+						self.deleteElementAtIndex(pos.y*MAP_SIZE_X+pos.x);
+					}
+				}
+
+			}
+
+
+			// add explosion entity at the place
+			self.setElementAtIndex(py*MAP_SIZE_X+px, new Explosion(self, px*TILE_SIZE, py*TILE_SIZE));
+
+		},
+
+		createExplosion: function(px, py) {
+
+			var self = this;
+
+			// set desired place to explosion
+			self.setElementAtIndex(py*MAP_SIZE_X+px, new Explosion(self, px*TILE_SIZE, py*TILE_SIZE));
+
+
+			// set surrounding places to explosions (maybe)
+			self.maybeCreateExplosion(px-1, py-1);
+			self.maybeCreateExplosion(px, py-1);
+			self.maybeCreateExplosion(px+1, py-1);
+
+			self.maybeCreateExplosion(px-1, py);
+			self.maybeCreateExplosion(px+1, py);
+
+			self.maybeCreateExplosion(px-1, py+1);
+			self.maybeCreateExplosion(px, py+1);
+			self.maybeCreateExplosion(px+1, py+1);
+
+		},
+
+
 		update: function() {
 			var self = this;
 
@@ -451,45 +584,10 @@
 			}
 
 
-
-
 			self.lastUpdate = currentTime;
-			// Update all explosions (may trigger new explosions
-
-			var newPendingExplosions = [];
-			self.pendingExplodePositions.forEach(function(item, idx, arr) {
-				for ( var y = item.y-1; y <= item.y+1; y++ ) {
-					for ( var x = item.x-1; x <= item.x+1; x++ ) {
-						// check if we hit a bomb, if yes, explode them too
-						var elIndex = y*MAP_SIZE_X+x;
-						var el = self.elements[elIndex];
-						if ( el instanceof Dummy ) {
-							el = el.ref;
-							if ( el instanceof Bomb ) {
-								newPendingExplosions.push({x:x, y:y});
-							}
-							// delete original element
-							var pos = el.translatePos();
-							self.deleteElementAtIndex(pos.y*MAP_SIZE_X+pos.x);
-							self.setElementAtIndex(elIndex, new Explosion(self, x*TILE_SIZE, y*TILE_SIZE));
-						} else {
-							if ( el === null ) {
-
-							} else if ( el instanceof Bomb ) {
-								newPendingExplosions.push({x:x, y:y});
-							}
-							self.setElementAtIndex(elIndex, new Explosion(self, x*TILE_SIZE, y*TILE_SIZE));
-						}
-					}
-				}
-			});
-			self.pendingExplodePositions = newPendingExplosions;
-
-
-
 
 			// update all elements ( they might start or stop falling )
-			var playerPosBefore = self.player.translatePos();
+			var playerPosBefore = self.player.getActualPosition();
 			self.elements.forEach(function(item, idx, arr) {
 				if ( item === null ) {
 					return;
@@ -501,7 +599,7 @@
 						return;
 					}
 				}
-				var pos = item.translatePos();
+				var pos = item.getActualPosition();
 				if ( item instanceof Stone || item instanceof Bomb ) {
 					// get element below the stone:
 					var elBelow = self.elements[(pos.y+1)*MAP_SIZE_X+pos.x];
@@ -514,9 +612,11 @@
 						item.dirX = 0;
 						item.isFalling = true;
 						item.wasFalling = false;
-						self.setElementAtIndex((pos.y+1)*MAP_SIZE_X+pos.x, new Dummy(item)); // item will fall there eventually!
+						if ( ! item instanceof Bomb || ! item.wasFalling ) {
+							self.setElementAtIndex((pos.y+1)*MAP_SIZE_X+pos.x, new Dummy(item)); // item will fall there eventually!
+						}
 
-					} else if ( (elBelow instanceof Stone ) && item.substep === 0 ) {
+					} else if ( (elBelow instanceof Stone || elBelow instanceof Bomb)  && item.substep === 0 && !item.isFalling ) {
 
 						var elLeft = self.getElementAtPos(pos.x-1, pos.y);
 						var elLeftBelow = self.getElementAtPos(pos.x-1, pos.y+1);
@@ -527,7 +627,10 @@
 							) {
 							item.dirX = -1;
 							item.dirY = 0;
-							self.setElementAtIndex((pos.y)*MAP_SIZE_X+(pos.x-1), new Dummy(item)); // item will fall there eventually!
+							item.isFalling = true;
+							if ( ! item instanceof Bomb || ! item.wasFalling ) {
+								self.setElementAtIndex((pos.y)*MAP_SIZE_X+(pos.x-1), new Dummy(item)); // item will fall there eventually!
+							}
 						} else {
 							var elRight =  self.getElementAtPos(pos.x+1, pos.y);
 							var elRightBelow = self.getElementAtPos(pos.x+1, pos.y+1);
@@ -538,7 +641,11 @@
 								) {
 								item.dirX = 1;
 								item.dirY = 0;
-								self.setElementAtIndex((pos.y)*MAP_SIZE_X+(pos.x+1), new Dummy(item)); // item will fall there eventually!
+								item.isFalling = true;
+
+								if ( ! item instanceof Bomb || ! item.wasFalling ) {
+									self.setElementAtIndex((pos.y)*MAP_SIZE_X+(pos.x+1), new Dummy(item)); // item will fall there eventually!
+								}
 							}
 						}
 
@@ -546,33 +653,8 @@
 				}
 
 				if ( item instanceof Bomb && item.wasFalling ) {
-					// create Explosion!
-					for ( var y = pos.y-1; y <= pos.y+1; y++ ) {
-						for ( var x = pos.x-1; x <= pos.x+1; x++ ) {
-							// check if we hit a bomb, if yes, explode them too
-
-
-							var elIndex = y*MAP_SIZE_X+x;
-							var el = self.elements[elIndex];
-							if ( el instanceof Dummy ) {
-								el = el.ref;
-								if ( el instanceof Bomb ) {
-									newPendingExplosions.push({x:x, y:y});
-								}
-								// delete original element
-								var pos = el.translatePos();
-								self.deleteElementAtIndex(pos.y*MAP_SIZE_X+pos.x);
-								self.setElementAtIndex(elIndex, new Explosion(self, x*TILE_SIZE, y*TILE_SIZE));
-							} else {
-								if ( el === null ) {
-
-								} else if ( el instanceof Bomb ) {
-									newPendingExplosions.push({x:x, y:y});
-								}
-								self.setElementAtIndex(elIndex, new Explosion(self, x*TILE_SIZE, y*TILE_SIZE));
-							}
-						}
-					}
+					var pos = item.getActualPosition();
+					self.createExplosion(pos.x,pos.y);
 				}
 				if (item.wasFalling) {
 					item.wasFalling = false;
@@ -601,7 +683,7 @@
 							item.wasFalling = true;
 						}
 					}
-					var pos = item.translatePos();
+					var pos = item.getActualPosition();
 					var elIdx = pos.y*MAP_SIZE_X+pos.x;
 
 					self.deleteElementAtIndex(idx);
@@ -622,6 +704,31 @@
 				if ( self.player.substep >= self.player.stepsPerTile ) {
 					self.player.substep = 0;
 				}
+			}
+
+			// player started moving. lets see if he hits the bounds of the map, if yes, then unmove and set substep to 0;
+			if ( self.player.substep === 1 ) {
+
+				var unmove = false;
+				if ( self.player.x <= 0 && self.player.dirX < 0 ) {
+					unmove = true;
+				}
+				if ( self.player.x >= (MAP_SIZE_X-1)*TILE_SIZE && self.player.dirX > 0 ) {
+					unmove = true;
+				}
+				if ( self.player.y <= 0 && self.player.dirY < 0 ) {
+					unmove = true;
+				}
+				if ( self.player.y >= (MAP_SIZE_Y-1)*TILE_SIZE && self.player.dirY > 0 ) {
+					unmove = true;
+				}
+
+				if ( unmove ) {
+					// just dont move..
+					self.player.unmove();
+					self.player.substep = 0;
+				}
+
 			}
 
 			// player started moving. check if some other elements must move and check if the player can even move!
@@ -665,6 +772,8 @@
 						unmove = true;
 					}
 				}
+
+
 				if ( unmove ) {
 					// just dont move..
 					self.player.unmove();
@@ -674,7 +783,7 @@
 
 
 			// player pos to index:
-			var playerPosAfter = self.player.translatePos();
+			var playerPosAfter = self.player.getActualPosition();
 
 			var elIndex = playerPosAfter.y*MAP_SIZE_X+playerPosAfter.x;
 			var elAtPlayer = self.elements[elIndex];
