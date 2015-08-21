@@ -46,9 +46,7 @@
 	}
 	Gfx.prototype = {
 		render: function(screen, x, y) {
-
 			this.sprite.render(screen, this.x, this.y, this.w, this.h, x, y, TILE_SIZE, TILE_SIZE);
-
 		}
 	};
 	function Font( sprite ) {
@@ -58,7 +56,7 @@
 			'opqrstu'+
 			'vwxyz?!'+
 			':,.1234'+
-			'567890';
+			'567890/';
 		this.sprite = sprite;
 	};
 	Font.prototype = {
@@ -200,6 +198,9 @@
 		unmove: function() {
 			this.x = this.x-this.dirX*this.speed;
 			this.y = this.y-this.dirY*this.speed;
+		},
+		render: function(context) {
+			this.gfx.render(context, this.x - this.game.renderStartX, this.y - this.game.renderStartY);
 		}
 	};
 
@@ -207,22 +208,30 @@
 	/* The Player
 	===============================================================*/
 	function Player(g, x, y) {
-		Entity.prototype.constructor.call(this, g, new Gfx(g.sprite, 16, 16, 16, 16), x, y, TILE_SIZE, TILE_SIZE);
+		Entity.prototype.constructor.call(this, g, null, x, y, TILE_SIZE, TILE_SIZE);
 		this.speed = OBJECT_SPEED;
 		this.stepsPerTile = TILE_SIZE/this.speed;
 		this.substep = 0; // max TILE_SIZE/this.speed
 		this.emeraldCount = 0;
-		this.gfxRight = new Gfx(g.sprite, 32, 16, 16, 16);
-		this.gfxLeft = new Gfx(g.sprite, 0, 32, 16, 16);
+
+		this.gfx = new Gfx(g.sprite, 16, 16, 16, 16);
+		this.gfxRight = [new Gfx(g.sprite, 32, 16, 16, 16), new Gfx(g.sprite, 16, 32, 16, 16)];
+		this.gfxLeft = [new Gfx(g.sprite, 0, 32, 16, 16), new Gfx(g.sprite, 0, 48, 16, 16)];
+		this.gfxUpDown = [new Gfx(g.sprite, 16, 48, 16, 16), new Gfx(g.sprite, 16, 64, 16, 16)];
+
+		this.frame = 0;
 	}
 	Player.prototype = Object.create(Entity.prototype);
 	Player.prototype.constructor = Player;
 	Player.prototype.render = function(context) {
 
+		this.frame = ( this.substep > this.stepsPerTile / 2 ) ? 1 : 0;
 		if ( this.dirX < 0 ) {
-			this.gfxLeft.render(context, this.x - this.game.renderStartX, this.y - this.game.renderStartY);
+			this.gfxLeft[this.frame].render(context, this.x - this.game.renderStartX, this.y - this.game.renderStartY);
 		} else if ( this.dirX > 0 ) {
-			this.gfxRight.render(context, this.x - this.game.renderStartX, this.y - this.game.renderStartY);
+			this.gfxRight[this.frame].render(context, this.x - this.game.renderStartX, this.y - this.game.renderStartY);
+		} else if ( this.dirY != 0 ) {
+			this.gfxUpDown[this.frame].render(context, this.x - this.game.renderStartX, this.y - this.game.renderStartY);
 		} else {
 			this.gfx.render(context, this.x - this.game.renderStartX, this.y - this.game.renderStartY);
 		}
@@ -283,6 +292,15 @@
 	Emerald.prototype = Object.create(Entity.prototype);
 	Emerald.prototype.constructor = Emerald;
 
+	/* Ruby
+	 ===============================================================*/
+	function Ruby(g, x, y){
+		Entity.prototype.constructor.call(this, g, new Gfx(g.sprite, 0, 64, 16, 16), x, y, TILE_SIZE, TILE_SIZE);
+		this.isWalkable = true;
+	}
+	Ruby.prototype = Object.create(Entity.prototype);
+	Ruby.prototype.constructor = Ruby;
+
 	/* Explosion
 	===============================================================*/
 	function Explosion(g, x, y) {
@@ -302,6 +320,32 @@
 	}
 	Dummy.prototype = Object.create(Entity.prototype);
 	Dummy.prototype.constructor = Dummy;
+
+	/* Door
+	===================================================================*/
+	function Door(g, x, y) {
+		Entity.prototype.constructor.call(this, g, null, x, y, TILE_SIZE, TILE_SIZE);
+		this.isWalkable = false;
+		this.isOpen = false;
+		this.stepsPerTile = TILE_SIZE/OBJECT_SPEED;
+
+		this.gfx = new Gfx(g.sprite, 32, 32, 16, 16);
+		this.gfxOpen = [new Gfx(this.game.sprite, 32, 48, 16, 16), new Gfx(this.game.sprite, 32, 64, 16, 16)];
+	}
+	Door.prototype = Object.create(Entity.prototype);
+	Door.prototype.constructor = Door;
+	Door.prototype.open = function() {
+		this.isOpen = true;
+		this.isWalkable = true;
+	};
+	Door.prototype.render = function(context) {
+		this.frame = ( this.substep > this.stepsPerTile / 2 ) ? 1 : 0;
+		if ( this.isOpen ) {
+			this.gfxOpen[this.frame].render(context, this.x - this.game.renderStartX, this.y - this.game.renderStartY);
+		} else {
+			this.gfx.render(context, this.x - this.game.renderStartX, this.y - this.game.renderStartY);
+		}
+	};
 
 
 
@@ -342,20 +386,22 @@
 		this.pendingExplodePositions = [];
 		this.elements = [];
 
+		this.emeraldCount = 0;
+
 		var map = [
 			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
 			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
 			'g','g','b','b','b','g','b','g','g','g','b','b','b','g','b','g','b','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
-			'g','g','b','g','b','g','b','g','g','g','b','g','g','g','g','b','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
-			'g','g','b','b','b','g','b','g','g','g','b','b','b','g','g','b','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
-			'g','g','b','g','b','g','b','g','g','g','b','g','g','g','g','b','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
+			'g','e','b','g','b','g','b','g','g','g','b','g','g','g','g','b','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
+			'r','e','b','b','b','g','b','g','g','g','b','b','b','g','g','b','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
+			'g','e','b','g','b','g','b','g','g','g','b','g','g','g','g','b','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
 			'g','g','b','g','b','g','b','b','b','g','b','b','b','g','b','g','b','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
 			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
 			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
 			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
 			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
 			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
-			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
+			'g','g','d','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
 			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
 			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
 			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
@@ -368,6 +414,7 @@
 			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
 			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
 		];
+		map = false;
 
 		if ( map ) {
 			for ( var i = 0; i < map.length; i++ ) {
@@ -378,21 +425,28 @@
 					case 'g': el = new Grass(this, posX, posY); break;
 					case 'b': el = new Bomb(this, posX, posY); break;
 					case 's': el = new Stone(this, posX, posY); break;
-					case 'e': el = new Emerald(this, posX, posY); break;
+					case 'e': el = new Emerald(this, posX, posY); this.emeraldCount++; break;
+					case 'r': el = new Ruby(this, posX, posY); this.emeraldCount+=5; break;
+					case 'd': el = new Door(this, posX, posY); break;
 					default: break;
 				}
 				this.elements[i] = el;
 			}
+			this.emeraldTarget = this.emeraldCount;
 
 		} else {
 
 			for ( var j = 0; j < MAP_SIZE_Y; j++ ) {
 				for ( var i = 0; i < MAP_SIZE_X; i++ ) {
 					var rnd = Math.random();
-					if ( rnd > 0.9 ) {
+					if ( rnd > 0.98 ) {
+						this.elements.push(new Ruby(this, i*TILE_SIZE, j*TILE_SIZE));
+						this.emeraldCount+=5;
+					} else if ( rnd > 0.9 ) {
 						this.elements.push(new Bomb(this, i*TILE_SIZE, j*TILE_SIZE));
 					} else if ( rnd > 0.8 ) {
 						this.elements.push(new Emerald(this, i*TILE_SIZE, j*TILE_SIZE));
+						this.emeraldCount++;
 					} else if ( rnd > 0.7 ) {
 						this.elements.push(new Stone(this, i*TILE_SIZE, j*TILE_SIZE));
 					} else {
@@ -400,6 +454,13 @@
 					}
 				}
 			}
+			// generate a door at a random position
+			var randX = Math.random()*MAP_SIZE_X | 0;
+			var randY = Math.random()*MAP_SIZE_Y | 0;
+			this.setElementAtIndex(randY*MAP_SIZE_X+randX, new Door(this, randX*TILE_SIZE, randY*TILE_SIZE));
+			//console.log('door at : '+randX+'/'+randY);
+
+			this.emeraldTarget = (this.emeraldCount * 0.75) | 0;
 
 		}
 
@@ -414,6 +475,8 @@
 
 				self.handleInput();
 				self.update();
+				self.render();
+			} else if ( self.state === 'won' ) {
 				self.render();
 			}
 
@@ -588,9 +651,33 @@
 
 			// update all elements ( they might start or stop falling )
 			var playerPosBefore = self.player.getActualPosition();
+
+
+			if ( self.player.substep === 0 ) {
+				// when player is on the door, he won the game! :p
+				var elAtPlayerPos = self.getElementAtPos(playerPosBefore.x, playerPosBefore.y);
+				//console.log('Current pos: '+ playerPosBefore.x+'/'+playerPosBefore.y);
+				if ( elAtPlayerPos instanceof Door ) {
+					// won
+					self.state = 'won';
+					self.player.dirX = 0;
+					self.player.dirY = 0;
+					return;
+				}
+			}
+
+
 			self.elements.forEach(function(item, idx, arr) {
 				if ( item === null ) {
 					return;
+				}
+
+				if ( item instanceof Door ) {
+					if ( item.substep >= item.stepsPerTile ) {
+						item.substep = 0;
+					} else {
+						item.substep++;
+					}
 				}
 				if ( item instanceof Explosion ) {
 					item.ticktick--;
@@ -790,11 +877,34 @@
 			if ( elAtPlayer instanceof Grass ) {
 				self.deleteElementAtIndex(elIndex);
 				console.log('ate some grass');
-			} else if ( elAtPlayer instanceof Emerald ) {
+			} else
+			// todo : refactor so that emeralds and ruby act the same, only give different points
+			if ( elAtPlayer instanceof Emerald ) {
 
 				self.deleteElementAtIndex(elIndex);
 				self.player.emeraldCount++;
+				if ( self.player.emeraldCount >= self.emeraldTarget ) {
+					// open all doors
+					self.elements.forEach(function(item, idx, arr) {
+						if ( item instanceof Door ) {
+							item.open();
+						}
+					});
+				}
 				console.log('got an emerald');
+			} else if ( elAtPlayer instanceof Ruby ) {
+
+				self.deleteElementAtIndex(elIndex);
+				self.player.emeraldCount+=5;
+				if ( self.player.emeraldCount >= self.emeraldTarget ) {
+					// open all doors
+					self.elements.forEach(function(item, idx, arr) {
+						if ( item instanceof Door ) {
+							item.open();
+						}
+					});
+				}
+				console.log('got a ruby!');
 			}
 
 
@@ -833,12 +943,8 @@
 					return;
 				}
 
-				//console.log(item);
-				item.gfx.render(
-					self.context,
-					item.x - self.renderStartX,
-					item.y - self.renderStartY
-				);
+
+				item.render(self.context);
 			});
 
 			//this.font.renderText(context, 'hallo\n\nabcdefghi  jklmnopqrstuvwxyz', 50,50);
@@ -856,12 +962,21 @@
 			hudLeftElement.render(self.context, 0, (VISIBLE_HEIGHT)*TILE_SIZE);
 			hudRightElement.render(self.context, (VISIBLE_WIDTH-1)*TILE_SIZE, (VISIBLE_HEIGHT)*TILE_SIZE);
 
-			self.font.renderText(
-				self.context,
-				"Emeralds: "+ self.player.emeraldCount,
-				FONT_SIZE/2,
-				(VISIBLE_HEIGHT)*TILE_SIZE + (TILE_SIZE/2 - FONT_SIZE/2)
-			);
+			if ( self.state === 'won' ) {
+				self.font.renderText(
+					self.context,
+					'A winner is you!',
+					FONT_SIZE/2,
+					(VISIBLE_HEIGHT)*TILE_SIZE + (TILE_SIZE/2 - FONT_SIZE/2)
+				);
+			} else {
+				self.font.renderText(
+					self.context,
+					"Emeralds: "+ self.player.emeraldCount + '/' + self.emeraldTarget,
+					FONT_SIZE/2,
+					(VISIBLE_HEIGHT)*TILE_SIZE + (TILE_SIZE/2 - FONT_SIZE/2)
+				);
+			}
 		},
 		render: function() {
 			var self = this;
