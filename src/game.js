@@ -126,7 +126,7 @@
 	};
 
 	function InputHandler() {
-		this.KEYS = { LEFT: 37, RIGHT: 39, UP: 38, DOWN: 40, SPACE: 32 };
+		this.KEYS = { LEFT: 37, RIGHT: 39, UP: 38, DOWN: 40, SPACE: 32, R: 82 };
 
 		this.keys = {};
 		this.keys[this.KEYS.LEFT] = new VirtualKey();
@@ -134,6 +134,7 @@
 		this.keys[this.KEYS.UP] = new VirtualKey();
 		this.keys[this.KEYS.DOWN] = new VirtualKey();
 		this.keys[this.KEYS.SPACE] = new VirtualKey();
+		this.keys[this.KEYS.R] = new VirtualKey();
 
 		var self = this;
 		window.addEventListener('keydown', function(e) {
@@ -151,6 +152,7 @@
 			}
 		},
 		tick: function() {
+			var self = this;
 			for ( var idx in self.keys ) {
 				if ( ! self.keys.hasOwnProperty(idx) ) {
 					continue;
@@ -161,7 +163,56 @@
 	};
 
 
+	/////////////////////////////////////////////////////////////////
+	// Audio
+	/////////////////////////////////////////////////////////////////
+	function AudioHandler() {
+		this.sounds = {};
+	}
+	AudioHandler.prototype = {
+		/**
+		 *
+		 * @param key              Sound name / Key in the sound array
+		 * @param simultanousCount How many sounds of this key can be played simultanously
+		 *                         This should be a higher number for longer playing sounds.
+		 * @param soundSettings    Sound settings for jsfxr
+		 */
+		add: function(key, simultanousCount, soundSettings) {
 
+			// create a new array with information about the sound for the given key
+			this.sounds[key] = [];
+
+			// foreach sound setting we have given for the key, push an entry
+			soundSettings.forEach(function(item, idx, arr) {
+				this.sounds[key].push({
+					current: 0,
+					count: simultanousCount,
+					pool: []
+				});
+				// push as many entries as we want
+				for ( var i = 0; i < simultanousCount; i++ ) {
+					var audio = new Audio();
+					audio.src = jsfxr(item);
+					this.sounds[key][idx].pool.push(audio);
+				}
+			}, this);
+		},
+		play: function(key) {
+			// fetch the sound for the key
+			var sound = this.sounds[key];
+
+			// get one of the sounds for the specified key randomly
+			var rand = sound.length > 1 ? Math.floor(Math.random()*sound.length) : 0;
+			//console.log('playing sound "'+key+'", variant '+rand);
+			var soundData = sound[rand];
+
+			// play the sound
+			soundData.pool[soundData.current].play();
+
+			// update current, so next time play is called, another instance of the sound (jsfxr) can be played
+			soundData.current < soundData.count - 1 ? soundData.current++ : soundData.current = 0;
+		}
+	};
 
 
 
@@ -225,12 +276,21 @@
 	Player.prototype.constructor = Player;
 	Player.prototype.render = function(context) {
 
-		this.frame = ( this.substep > this.stepsPerTile / 2 ) ? 1 : 0;
+		if ( this.substep >= this.stepsPerTile - 2 ) {
+			this.frame = 1;
+		} else if (this.substep >= this.stepsPerTile - 4 ) {
+			this.frame = 1;
+		} else if (this.substep >= this.stepsPerTile - 6 ) {
+			this.frame = 0;
+		} else if (this.substep >= this.stepsPerTile - 8 ) {
+			this.frame = 0;
+		}
 		if ( this.dirX < 0 ) {
 			this.gfxLeft[this.frame].render(context, this.x - this.game.renderStartX, this.y - this.game.renderStartY);
 		} else if ( this.dirX > 0 ) {
 			this.gfxRight[this.frame].render(context, this.x - this.game.renderStartX, this.y - this.game.renderStartY);
 		} else if ( this.dirY != 0 ) {
+		//console.log(this.frame);
 			this.gfxUpDown[this.frame].render(context, this.x - this.game.renderStartX, this.y - this.game.renderStartY);
 		} else {
 			this.gfx.render(context, this.x - this.game.renderStartX, this.y - this.game.renderStartY);
@@ -382,21 +442,85 @@
 		}); // load sprite
 
 
+		this.audioHandler = new AudioHandler();
+
+		/*
+		* Sound Arguments are:
+		* ====================================================
+		*                a: waveType
+		*                b: attackTime
+		*                c: sustainTime
+		*                d: sustainPunch
+		*                e: decayTime
+		*                f: startFrequency
+		*                g: minFrequency
+		*                h: slide
+		*                i: deltaSlide
+		*                j: vibratoDepth
+		*                k: vibratoSpeed
+		*                l: changeAmount
+		*                m: changeSpeed
+		*                n: squareDuty
+		*                o: dutySweep
+		*                p: repeatSpeed
+		*                q: phaserOffset
+		*                r: phaserSweep
+		*                s: lpFilterCutoff
+		*                t: lpFilterCutoffSweep
+		*                u: lpFilterResonance
+		*                v: hpFilterCutoff
+		*                w: hpFilterCutoffSweep
+		*                x: masterVolume
+		*/
+
+		// emerald sound
+		this.audioHandler.add( 'emerald', 5,
+			[
+				[0,,0.01,0.4394,0.3103,0.8765,,,,,,0.3614,0.5278,,,,,,1,,,,,0.5]
+				//[1,,0.01,0.4394,0.3103,0.8765,,,,,,0.3614,0.5278,,,,,,1,,,,,0.5],
+				//[2,,0.01,0.4394,0.3103,0.8765,,,,,,0.3614,0.5278,,,,,,1,,,,,0.5],
+				//[3,,0.01,0.4394,0.3103,0.8765,,,,,,0.3614,0.5278,,,,,,1,,,,,0.5]
+			]
+		);
+		// emerald sound
+		this.audioHandler.add( 'explosion', 5,
+			[
+				[3,,0.131,0.5546,0.4945,0.1142,,,,,,,,,,0.6184,-0.1018,-0.1237,1,,,,,0.5]
+			]
+		);
+
+		this.audioHandler.add('walk', 1,
+			[
+				[3,,0.1017,0.0535,0.0782,0.0735,,-0.536,,,,,,,,,,,1,,,0.0436,,0.1735],
+				//[2,,0.1257,0.1265,0.0542,0.1935,0.0535,-0.933,-0.493,0.0735,0.2135,-0.547,0.1735,0.0379,0.0015,0.1065,-0.773,0.453,0.2535,-0.667,0.8865,0.0665,-0.813,0.29]
+				//[2,,0.1396,0.2205,0.0403,0.2718,0.0664,-0.6762,0.08,0.0374,0.0259,-0.0392,,0.0379,0.0015,0.0231,-0.0831,0.037,0.9115,-0.0838,0.0382,0.0236,-0.0658,0.29]
+			]
+		);
+
+		this.audioHandler.add('reverse', 2,
+			[
+				[2,,0.175,,0.4147,0.3131,,0.2175,,,,,,,,0.7216,,,1,,,,,0.1735]
+				//[3,0.0323,0.2485,0.0299,0.283,0.3206,0.05,0.5595,0.0932,,0.0268,-0.0745,,0.0952,-0.0565,0.7068,-0.068,0.0111,0.964,-0.0807,0.07,0.0512,0.1103,0.1735]
+			]
+		);
+
 
 		this.pendingExplodePositions = [];
 		this.elements = [];
+		this.rElements = [];
+		this.isReversed = false;
 
 		this.emeraldCount = 0;
 
 		var map = [
 			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
 			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
-			'g','g','b','b','b','g','b','g','g','g','b','b','b','g','b','g','b','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
-			'g','e','b','g','b','g','b','g','g','g','b','g','g','g','g','b','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
-			'r','e','b','b','b','g','b','g','g','g','b','b','b','g','g','b','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
-			'g','e','b','g','b','g','b','g','g','g','b','g','g','g','g','b','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
-			'g','g','b','g','b','g','b','b','b','g','b','b','b','g','b','g','b','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
-			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
+			'g','g','b','X','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
+			'g','g','r','X','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
+			'g','g','s','X','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
+			'g','g','s','X','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
+			'g','g','g','X','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
+			'g','g','g','X','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
 			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
 			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
 			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
@@ -412,25 +536,49 @@
 			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
 			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
 			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
-			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
+			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g'
 		];
 		map = false;
 
 		if ( map ) {
 			for ( var i = 0; i < map.length; i++ ) {
 				var el = null;
+				var rel = null;
 				var posX = (i%MAP_SIZE_X) * TILE_SIZE;
 				var posY = parseInt(i/MAP_SIZE_X, 10) * TILE_SIZE;
 				switch ( map[i] ) {
-					case 'g': el = new Grass(this, posX, posY); break;
-					case 'b': el = new Bomb(this, posX, posY); break;
-					case 's': el = new Stone(this, posX, posY); break;
-					case 'e': el = new Emerald(this, posX, posY); this.emeraldCount++; break;
-					case 'r': el = new Ruby(this, posX, posY); this.emeraldCount+=5; break;
-					case 'd': el = new Door(this, posX, posY); break;
+					case 'g':
+						el = new Grass(this, posX, posY);
+						rel = null;
+						break;
+					case 'b':
+						el = new Bomb(this, posX, posY);
+						rel = new Ruby(this, posX, posY);
+						this.emeraldCount+=5;
+						break;
+					case 's':
+						el = new Stone(this, posX, posY);
+						rel = new Emerald(this, posX, posY);
+						this.emeraldCount++;
+						break;
+					case 'e':
+						el = new Emerald(this, posX, posY);
+						rel = new Stone(this,posX, posY);
+						this.emeraldCount++;
+						break;
+					case 'r':
+						el = new Ruby(this, posX, posY);
+						rel = new Bomb(this,posX, posY);
+						this.emeraldCount+=5;
+						break;
+					case 'd':
+						el = new Door(this, posX, posY);
+						rel = new Door(this,posX, posY);
+						break;
 					default: break;
 				}
 				this.elements[i] = el;
+				this.rElements[i] = rel;
 			}
 			this.emeraldTarget = this.emeraldCount;
 
@@ -439,18 +587,30 @@
 			for ( var j = 0; j < MAP_SIZE_Y; j++ ) {
 				for ( var i = 0; i < MAP_SIZE_X; i++ ) {
 					var rnd = Math.random();
-					if ( rnd > 0.98 ) {
+
+					//todo: add reverses
+					if ( rnd > 0.99 ) {
 						this.elements.push(new Ruby(this, i*TILE_SIZE, j*TILE_SIZE));
 						this.emeraldCount+=5;
+						this.rElements.push(new Bomb(this, i*TILE_SIZE, j*TILE_SIZE));
+					} else if ( rnd > 0.97 ) {
+						this.rElements.push(new Grass(this, i*TILE_SIZE, j*TILE_SIZE));
+						this.elements.push(null);
 					} else if ( rnd > 0.9 ) {
 						this.elements.push(new Bomb(this, i*TILE_SIZE, j*TILE_SIZE));
+						this.rElements.push(new Ruby(this, i*TILE_SIZE, j*TILE_SIZE));
+						this.emeraldCount+=5;
 					} else if ( rnd > 0.8 ) {
 						this.elements.push(new Emerald(this, i*TILE_SIZE, j*TILE_SIZE));
+						this.rElements.push(new Stone(this, i*TILE_SIZE, j*TILE_SIZE));
 						this.emeraldCount++;
 					} else if ( rnd > 0.7 ) {
 						this.elements.push(new Stone(this, i*TILE_SIZE, j*TILE_SIZE));
+						this.rElements.push(new Emerald(this, i*TILE_SIZE, j*TILE_SIZE));
+						this.emeraldCount++;
 					} else {
 						this.elements.push(new Grass(this, i*TILE_SIZE, j*TILE_SIZE));
+						this.rElements.push(null);
 					}
 				}
 			}
@@ -488,34 +648,93 @@
 	}
 	Game.prototype = {
 		setElementAtIndex: function(idx, el) {
+
 			if ( this.elements.length > idx && idx >= 0 ) {
-				this.elements[idx] = el;
+
+				var rel = null;
+				var posX = (idx%MAP_SIZE_X) * TILE_SIZE;
+				var posY = parseInt(idx/MAP_SIZE_X, 10) * TILE_SIZE;
+
+				if ( el === null ) {
+					rel = new Grass(this, posX, posY);
+				} else if ( el instanceof Grass ) {
+					rel = null;
+				} else if ( el instanceof Bomb ) {
+					rel = new Ruby(this, posX, posY);
+				} else if ( el instanceof Stone ) {
+					rel = new Emerald(this, posX, posY);
+				} else if ( el instanceof Ruby ) {
+					rel = new Bomb(this, posX, posY);
+				} else if ( el instanceof Emerald ) {
+					rel = new Stone(this, posX, posY);
+				} else if ( el instanceof Explosion ) {
+					rel = new Explosion(this, posX, posY); // explosion are explosion
+				} else if ( el instanceof Door ) {
+					rel = new Door(this, posX, posY); // door are door
+				}
+
+				if ( this.isReversed ) {
+					this.elements[idx] = rel;
+					this.rElements[idx] = el;
+				} else {
+					this.elements[idx] = el;
+					this.rElements[idx] = rel;
+				}
 			}
 		},
 		deleteElementAtIndex: function(idx) {
 			if ( this.elements.length > idx && idx >= 0 ) {
+
+				var el = this.elements[idx];
+				// remove all dummies
+				this.elements.forEach(function(item, i, arr) {
+					if ( item instanceof Dummy && item.ref === el ) {
+						delete this.elements[i];
+						this.setElementAtIndex(i, null);
+					}
+				}, this);
+				var rEl = this.rElements[idx];
+				// remove all dummies
+				this.rElements.forEach(function(item, i, arr) {
+					if ( item instanceof Dummy && item.ref === el ) {
+						delete this.rElements[i];
+						var posX = (i%MAP_SIZE_X) * TILE_SIZE;
+						var posY = parseInt(i/MAP_SIZE_X, 10) * TILE_SIZE;
+						this.setElementAtIndex(i, new Grass(this, posX, posY));
+					}
+				}, this);
+
 				delete this.elements[idx];
+				//delete this.rElements[idx];
 				this.setElementAtIndex(idx, null);
 			}
 		},
 		getElementAtPos: function(x, y) {
-			var idx = y*MAP_SIZE_X+x;
-			return this.elements[idx];
-			/*
-			var foundItem = null;
-			this.elements.forEach(function(item, idx, arr) {
-				if ( item === null ) {
-					return;
-				}
-				var itemX = Math.round(item.x);
-				var itemY = Math.round(item.y);
-				if ( x === itemX && y === itemY ) {
-					foundItem = item;
-					return false;
+
+			if ( x < 0 || x >= MAP_SIZE_X || y < 0 || y >= MAP_SIZE_Y ) {
+				return undefined;
+			}
+
+			if ( this.isReversed ) {
+				return this.rElements[y*MAP_SIZE_X+x];
+			} else {
+				return this.elements[y*MAP_SIZE_X+x];
+			}
+		},
+
+		openDoors: function() {
+			var self = this;
+			self.elements.forEach(function(item, idx, arr) {
+				if ( item instanceof Door ) {
+					item.open();
 				}
 			});
-			return foundItem;
-			*/
+			self.rElements.forEach(function(item, idx, arr) {
+				if ( item instanceof Door ) {
+					item.open();
+				}
+			});
+
 		},
 
 		drawBackground: function() {
@@ -546,6 +765,13 @@
 					} else {
 						self.player.dirX = 0;
 					}
+				}
+			}
+
+			if ( self.inputHandler.keys[self.inputHandler.KEYS.R].isPressed ) {
+				if ( self.player.substep === 0 ) {
+					self.isReversed = !self.isReversed;
+					self.audioHandler.play('reverse');
 				}
 			}
 
@@ -634,6 +860,7 @@
 			self.maybeCreateExplosion(px, py+1);
 			self.maybeCreateExplosion(px+1, py+1);
 
+			self.audioHandler.play('explosion');
 		},
 
 
@@ -667,7 +894,8 @@
 			}
 
 
-			self.elements.forEach(function(item, idx, arr) {
+			var elementsToUpdate = self.isReversed ? self.rElements : self.elements;
+			elementsToUpdate.forEach(function(item, idx, arr) {
 				if ( item === null ) {
 					return;
 				}
@@ -689,7 +917,7 @@
 				var pos = item.getActualPosition();
 				if ( item instanceof Stone || item instanceof Bomb ) {
 					// get element below the stone:
-					var elBelow = self.elements[(pos.y+1)*MAP_SIZE_X+pos.x];
+					var elBelow = self.getElementAtPos(pos.x, pos.y+1);
 					if ( elBelow === null
 						&& item.substep === 0
 						&& ( !(playerPosBefore.x === pos.x && playerPosBefore.y === pos.y+1) || item.wasFalling )
@@ -748,7 +976,7 @@
 				}
 			});
 
-			self.elements.forEach(function(item, idx, arr) {
+			elementsToUpdate.forEach(function(item, idx, arr) {
 				if ( item === null ) {
 					return;
 				}
@@ -781,10 +1009,12 @@
 
 
 
+			var playerHasMoved = false;
 
 			// check if at the position is something and that something is not already moving
 			if ( self.player.dirX !== 0 || self.player.dirY !== 0 ) {
 				self.player.move();
+				playerHasMoved = true;
 
 				// player moves each field in 8 steps
 				self.player.substep++;
@@ -814,6 +1044,7 @@
 					// just dont move..
 					self.player.unmove();
 					self.player.substep = 0;
+					playerHasMoved = false;
 				}
 
 			}
@@ -824,8 +1055,8 @@
 				var unmove = false;
 				if ( self.player.dirX !== 0 ) {
 					// moving horizontally
-					var nextEl= self.elements[playerPosBefore.y*MAP_SIZE_X+(playerPosBefore.x+self.player.dirX)];
-					var nextNextEl = self.elements[playerPosBefore.y*MAP_SIZE_X+(playerPosBefore.x+self.player.dirX+self.player.dirX)];
+					var nextEl= self.getElementAtPos(playerPosBefore.x+self.player.dirX, playerPosBefore.y);
+					var nextNextEl = self.getElementAtPos(playerPosBefore.x+self.player.dirX+self.player.dirX, playerPosBefore.y);
 
 					// do we have to unmove the player?
 					if ( typeof nextEl === 'undefined' ) {
@@ -847,7 +1078,8 @@
 					}
 				} else if ( self.player.dirY !== 0 ) {
 					// moving vertically
-					var nextEl= self.elements[(playerPosBefore.y+self.player.dirY)*MAP_SIZE_X+playerPosBefore.x];
+
+					var nextEl= self.getElementAtPos(playerPosBefore.x, playerPosBefore.y+self.player.dirY);
 					//var nextNextEl = self.elements[(playerPosBefore.y+self.player.dirY+self.player.dirY)*MAP_SIZE_X+playerPosBefore.x];
 
 					// do we have to unmove the player?
@@ -865,18 +1097,23 @@
 					// just dont move..
 					self.player.unmove();
 					self.player.substep = 0;
+					playerHasMoved = false;
 				}
 			}
 
+
+			if ( playerHasMoved ) {
+				self.audioHandler.play('walk');
+			}
 
 			// player pos to index:
 			var playerPosAfter = self.player.getActualPosition();
 
 			var elIndex = playerPosAfter.y*MAP_SIZE_X+playerPosAfter.x;
-			var elAtPlayer = self.elements[elIndex];
+			var elAtPlayer= self.getElementAtPos(playerPosAfter.x, playerPosAfter.y);
 			if ( elAtPlayer instanceof Grass ) {
 				self.deleteElementAtIndex(elIndex);
-				console.log('ate some grass');
+				//console.log('ate some grass');
 			} else
 			// todo : refactor so that emeralds and ruby act the same, only give different points
 			if ( elAtPlayer instanceof Emerald ) {
@@ -885,26 +1122,24 @@
 				self.player.emeraldCount++;
 				if ( self.player.emeraldCount >= self.emeraldTarget ) {
 					// open all doors
-					self.elements.forEach(function(item, idx, arr) {
-						if ( item instanceof Door ) {
-							item.open();
-						}
-					});
+					self.openDoors();
 				}
-				console.log('got an emerald');
+				//console.log('got an emerald');
+
+				self.audioHandler.play('emerald');
+
 			} else if ( elAtPlayer instanceof Ruby ) {
 
 				self.deleteElementAtIndex(elIndex);
 				self.player.emeraldCount+=5;
 				if ( self.player.emeraldCount >= self.emeraldTarget ) {
 					// open all doors
-					self.elements.forEach(function(item, idx, arr) {
-						if ( item instanceof Door ) {
-							item.open();
-						}
-					});
+					self.openDoors();
 				}
-				console.log('got a ruby!');
+				//console.log('got a ruby!');
+
+				self.audioHandler.play('emerald');
+
 			}
 
 
@@ -928,7 +1163,8 @@
 				self.renderStartY = MAP_SIZE_Y*TILE_SIZE - VISIBLE_HEIGHT*TILE_SIZE;
 			}
 
-			this.elements.forEach(function(item, idx, arr) {
+			var elementsToRender = self.isReversed ? self.rElements : self.elements;
+			elementsToRender.forEach(function(item, idx, arr) {
 				if ( item === null ) {
 					return;
 				}
