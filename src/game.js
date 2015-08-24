@@ -243,7 +243,7 @@
 			this.sounds[key] = [];
 
 			// foreach sound setting we have given for the key, push an entry
-			soundSettings.forEach(function(item, idx, arr) {
+			soundSettings.forEach(function(item, idx) {
 				this.sounds[key].push({
 					current: 0,
 					count: simultanousCount,
@@ -718,11 +718,12 @@
 				this.elements.push(null);
 				this.rElements.push(null);
 			}
+			var x, y;
 			for ( var i = 0; i < map.length; i++ ) {
 				var el = null;
 				var rel = null;
-				var x = (i%MAP_SIZE_X) * TILE_SIZE;
-				var y = parseInt(i/MAP_SIZE_X, 10) * TILE_SIZE;
+				x = (i%MAP_SIZE_X) * TILE_SIZE;
+				y = parseInt(i/MAP_SIZE_X, 10) * TILE_SIZE;
 				switch ( map[i] ) {
 					case 'g':
 						this.setElementAtIndex(i, new Grass(this, x, y));
@@ -755,12 +756,13 @@
 			}
 
 			var index = 0;
+			var x, y;
 			for ( var j = 0; j < MAP_SIZE_Y; j++ ) {
 				for ( var i = 0; i < MAP_SIZE_X; i++ ) {
 
 					var rnd = Math.random();
-					var x = i*TILE_SIZE;
-					var y = j*TILE_SIZE;
+					x = i*TILE_SIZE;
+					y = j*TILE_SIZE;
 
 					if ( rnd > 0.99 ) {
 						this.setElementAtIndex(index, new Ruby(this, x, y));
@@ -827,65 +829,68 @@
 	Game.prototype = {
 		setElementAtIndex: function(idx, el) {
 
-			if ( this.elements.length > idx && idx >= 0 ) {
+			if ( this.elements.length <= idx || idx < 0 ) {
+				return;
+			}
 
-				var rel = null;
-				var posX = (idx%MAP_SIZE_X) * TILE_SIZE;
-				var posY = parseInt(idx/MAP_SIZE_X, 10) * TILE_SIZE;
+			var rel = null;
+			var posX = (idx%MAP_SIZE_X) * TILE_SIZE;
+			var posY = parseInt(idx/MAP_SIZE_X, 10) * TILE_SIZE;
 
-				if ( el === null ) {
-					rel = new Grass(this, posX, posY);
-				} else if ( el instanceof Grass ) {
-					rel = null;
-				} else if ( el instanceof Bomb ) {
-					rel = new Ruby(this, posX, posY);
-				} else if ( el instanceof Stone ) {
-					rel = new Emerald(this, posX, posY);
-				} else if ( el instanceof Ruby ) {
-					rel = new Bomb(this, posX, posY);
-				} else if ( el instanceof Emerald ) {
-					rel = new Stone(this, posX, posY);
-				} else if ( el instanceof Explosion ) {
-					rel = new Explosion(this, posX, posY); // explosion are explosion
-				} else if ( el instanceof Door ) {
-					rel = new Door(this, posX, posY); // door are door
-				}
+			if ( el === null ) {
+				rel = new Grass(this, posX, posY);
+			} else if ( el instanceof Grass ) {
+				rel = null;
+			} else if ( el instanceof Bomb ) {
+				rel = new Ruby(this, posX, posY);
+			} else if ( el instanceof Stone ) {
+				rel = new Emerald(this, posX, posY);
+			} else if ( el instanceof Ruby ) {
+				rel = new Bomb(this, posX, posY);
+			} else if ( el instanceof Emerald ) {
+				rel = new Stone(this, posX, posY);
+			} else if ( el instanceof Explosion ) {
+				rel = new Explosion(this, posX, posY); // explosion are explosion
+			} else if ( el instanceof Door ) {
+				rel = new Door(this, posX, posY); // door are door
+			}
 
-				if ( this.isReversed ) {
-					this.elements[idx] = rel;
-					this.rElements[idx] = el;
-				} else {
-					this.elements[idx] = el;
-					this.rElements[idx] = rel;
-				}
+			if ( this.isReversed ) {
+				this.elements[idx] = rel;
+				this.rElements[idx] = el;
+			} else {
+				this.elements[idx] = el;
+				this.rElements[idx] = rel;
 			}
 		},
 		deleteElementAtIndex: function(idx) {
-			if ( this.elements.length > idx && idx >= 0 ) {
 
-				var el = this.elements[idx];
-				// remove all dummies
-				this.elements.forEach(function(item, i, arr) {
-					if ( item instanceof Dummy && item.ref === el ) {
-						delete this.elements[i];
-						this.setElementAtIndex(i, null);
-					}
-				}, this);
-				var rEl = this.rElements[idx];
-				// remove all dummies
-				this.rElements.forEach(function(item, i, arr) {
-					if ( item instanceof Dummy && item.ref === el ) {
-						delete this.rElements[i];
-						var posX = (i%MAP_SIZE_X) * TILE_SIZE;
-						var posY = parseInt(i/MAP_SIZE_X, 10) * TILE_SIZE;
-						this.setElementAtIndex(i, new Grass(this, posX, posY));
-					}
-				}, this);
-
-				delete this.elements[idx];
-				//delete this.rElements[idx];
-				this.setElementAtIndex(idx, null);
+			if ( this.elements.length <= idx || idx < 0 ) {
+				return;
 			}
+
+			var el = this.elements[idx];
+			// remove all dummies
+			this.elements.forEach(function(item, i) {
+				if ( item instanceof Dummy && item.ref === el ) {
+					delete this.elements[i];
+					this.setElementAtIndex(i, null);
+				}
+			}, this);
+			var rEl = this.rElements[idx];
+			// remove all dummies
+			this.rElements.forEach(function(item, i) {
+				if ( item instanceof Dummy && item.ref === rEl ) {
+					delete this.rElements[i];
+					var posX = (i%MAP_SIZE_X) * TILE_SIZE;
+					var posY = parseInt(i/MAP_SIZE_X, 10) * TILE_SIZE;
+					this.setElementAtIndex(i, new Grass(this, posX, posY));
+				}
+			}, this);
+
+			delete this.elements[idx];
+			//delete this.rElements[idx];
+			this.setElementAtIndex(idx, null);
 		},
 		getElementAtPos: function(x, y) {
 
@@ -1053,7 +1058,7 @@
 
 
 			var elementsToUpdate = self.isReversed ? self.rElements : self.elements;
-			elementsToUpdate.forEach(function(item, idx, arr) {
+			elementsToUpdate.forEach(function(item, idx) {
 				if ( item === null ) {
 					return;
 				}
@@ -1064,6 +1069,7 @@
 				}
 
 				var pos = item.getActualPosition();
+
 				if ( (item instanceof Stone || item instanceof Bomb) && item.substep === 0 ) {
 					// get element below the stone:
 					var elBelow = self.getElementAtPos(pos.x, pos.y+1);
@@ -1116,7 +1122,6 @@
 				}
 
 				if ( item instanceof Bomb && item.wasFalling ) {
-					var pos = item.getActualPosition();
 					self.createExplosion(pos.x,pos.y);
 				}
 				if (item.wasFalling) {
