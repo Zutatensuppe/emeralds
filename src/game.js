@@ -16,6 +16,15 @@
 
 	var OBJECT_SPEED = TILE_SIZE/8;
 
+	// some keys:
+	const VK_LEFT = 37;
+	const VK_RIGHT = 39;
+	const VK_UP = 38;
+	const VK_DOWN = 40;
+	const VK_SPACE = 32;
+	const VK_R = 82;
+	const VK_M = 77;
+
 	/////////////////////////////////////////////////////////////////
 	// Sprite/Graphics
 	/////////////////////////////////////////////////////////////////
@@ -58,7 +67,7 @@
 			':,.1234'+
 			'567890/';
 		this.sprite = sprite;
-	};
+	}
 	Font.prototype = {
 		posInSprite: function(letter) {
 			var xstart = 64;
@@ -78,19 +87,19 @@
 		},
 		renderText: function(screen, text, x, y) {
 			text = text.toLowerCase();
-			var origX = x;
+			var _x = x;
 			for ( var i = 0, iLen = text.length; i < iLen; i++ ) {
 				var chr = text.charAt(i);
 				if ( chr === "\n" ) {
 					y+=16;
-					x = origX;
+					_x = x;
 					continue;
 				}
 				var posInSprite = this.posInSprite(chr);
 				if ( posInSprite ) {
-					this.sprite.render(screen, posInSprite.x, posInSprite.y, 8, 8, x, y, FONT_SIZE, FONT_SIZE);
+					this.sprite.render(screen, posInSprite.x, posInSprite.y, 8, 8, _x, y, FONT_SIZE, FONT_SIZE);
 				}
-				x+=FONT_SIZE;
+				_x+=FONT_SIZE;
 			}
 		}
 	};
@@ -126,15 +135,15 @@
 	};
 
 	function InputHandler() {
-		this.KEYS = { LEFT: 37, RIGHT: 39, UP: 38, DOWN: 40, SPACE: 32, R: 82 };
 
 		this.keys = {};
-		this.keys[this.KEYS.LEFT] = new VirtualKey();
-		this.keys[this.KEYS.RIGHT] = new VirtualKey();
-		this.keys[this.KEYS.UP] = new VirtualKey();
-		this.keys[this.KEYS.DOWN] = new VirtualKey();
-		this.keys[this.KEYS.SPACE] = new VirtualKey();
-		this.keys[this.KEYS.R] = new VirtualKey();
+		this.keys[VK_LEFT] = new VirtualKey();
+		this.keys[VK_RIGHT] = new VirtualKey();
+		this.keys[VK_UP] = new VirtualKey();
+		this.keys[VK_DOWN] = new VirtualKey();
+		this.keys[VK_SPACE] = new VirtualKey();
+		this.keys[VK_R] = new VirtualKey();
+		this.keys[VK_M] = new VirtualKey();
 
 		var self = this;
 		window.addEventListener('keydown', function(e) {
@@ -159,6 +168,12 @@
 				}
 				self.keys[idx].tick();
 			}
+		},
+		isDown: function(keyCode) {
+			return this.keys[keyCode] && this.keys[keyCode].isDown;
+		},
+		isPressed: function(keyCode) {
+			return this.keys[keyCode] && this.keys[keyCode].isPressed;
 		}
 	};
 
@@ -168,8 +183,53 @@
 	/////////////////////////////////////////////////////////////////
 	function AudioHandler() {
 		this.sounds = {};
+		this.sequences = {};
+		this.isMuted = false;
+
+		this.instruments = {
+			cymbal: jsfxr([3,,0.1787,,0.1095,0.502,,,,,,,,0.2868,,,,,1,,,0.1,,0.5]),
+			drum: jsfxr([3,,0.1787,,0.1095,0.17,,-0.58,,,,,,0.2868,,,,,1,,,0.1,,0.5]),
+			bass: jsfxr([0,,0.1897,0.2618,1,0.12,,0.02,,,,,,0.4812,-0.1783,,,,1,,,0.132,,0.5]),
+			wave: jsfxr([0,0,0.037985307862982154,0.5060126532800495,0.4385391124524176,0.5989582167007029,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0.4]),
+			beep: jsfxr([0,0,0.037985307862982154,0.5060126532800495,0.4385391124524176,0.5989582167007029,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0.2])
+		};
+		//this.soundFx = new SoundFx(new AudioContext());
 	}
 	AudioHandler.prototype = {
+
+		mute: function( mute ) {
+
+			this.isMuted = mute;
+			for ( var key in this.sequences ) {
+				if ( this.sequences.hasOwnProperty(key) ) {
+					this.sequences[key].mute(mute);
+				}
+			}
+		},
+
+		hasSequence: function(key) {
+			return !!this.sequences[key];
+		},
+
+		addSequence: function(key, sequencer) {
+			this.sequences[key] = sequencer;
+		},
+		playSequence: function(key) {
+			if ( ! this.sequences[key] ) {
+				return;
+			}
+			this.sequences[key].play();
+		},
+		stopSequence: function(key) {
+			if ( ! this.sequences[key] ) {
+				return;
+			}
+			this.sequences[key].stop();
+		},
+
+		has: function(key) {
+			return !! this.sounds[key];
+		},
 		/**
 		 *
 		 * @param key              Sound name / Key in the sound array
@@ -194,12 +254,25 @@
 					var audio = new Audio();
 					audio.src = jsfxr(item);
 					this.sounds[key][idx].pool.push(audio);
+
+					//this.sounds[key][idx].pool.push(item);
 				}
 			}, this);
 		},
 		play: function(key) {
 			// fetch the sound for the key
 			var sound = this.sounds[key];
+			if ( ! sound ) {
+				return;
+			}
+
+			//var self = this;
+			//sound.forEach(function(soundData, idx, arr) {
+			//	self.soundFx.play(soundData.pool[soundData.current]);
+			//
+			//	// update current, so next time play is called, another instance of the sound (jsfxr) can be played
+			//	soundData.current < soundData.count - 1 ? soundData.current++ : soundData.current = 0;
+			//});
 
 			// get one of the sounds for the specified key randomly
 			var rand = sound.length > 1 ? Math.floor(Math.random()*sound.length) : 0;
@@ -207,7 +280,17 @@
 			var soundData = sound[rand];
 
 			// play the sound
-			soundData.pool[soundData.current].play();
+			if ( !this.isMuted ) {
+				soundData.pool[soundData.current].play();
+			}
+
+			//sound.forEach(function(soundData, idx, arr) {
+			//	self.soundFx.play(soundData.pool[soundData.current]);
+			//
+			//	// update current, so next time play is called, another instance of the sound (jsfxr) can be played
+			//	soundData.current < soundData.count - 1 ? soundData.current++ : soundData.current = 0;
+			//});
+
 
 			// update current, so next time play is called, another instance of the sound (jsfxr) can be played
 			soundData.current < soundData.count - 1 ? soundData.current++ : soundData.current = 0;
@@ -263,37 +346,34 @@
 		this.speed = OBJECT_SPEED;
 		this.stepsPerTile = TILE_SIZE/this.speed;
 		this.substep = 0; // max TILE_SIZE/this.speed
-		this.emeraldCount = 0;
+		this.gemCount = 0;
 
 		this.gfx = new Gfx(g.sprite, 16, 16, 16, 16);
 		this.gfxRight = [new Gfx(g.sprite, 32, 16, 16, 16), new Gfx(g.sprite, 16, 32, 16, 16)];
 		this.gfxLeft = [new Gfx(g.sprite, 0, 32, 16, 16), new Gfx(g.sprite, 0, 48, 16, 16)];
 		this.gfxUpDown = [new Gfx(g.sprite, 16, 48, 16, 16), new Gfx(g.sprite, 16, 64, 16, 16)];
 
-		this.frame = 0;
 	}
 	Player.prototype = Object.create(Entity.prototype);
 	Player.prototype.constructor = Player;
 	Player.prototype.render = function(context) {
 
-		if ( this.substep >= this.stepsPerTile - 2 ) {
-			this.frame = 1;
-		} else if (this.substep >= this.stepsPerTile - 4 ) {
-			this.frame = 1;
-		} else if (this.substep >= this.stepsPerTile - 6 ) {
-			this.frame = 0;
-		} else if (this.substep >= this.stepsPerTile - 8 ) {
-			this.frame = 0;
-		}
-		if ( this.dirX < 0 ) {
-			this.gfxLeft[this.frame].render(context, this.x - this.game.renderStartX, this.y - this.game.renderStartY);
-		} else if ( this.dirX > 0 ) {
-			this.gfxRight[this.frame].render(context, this.x - this.game.renderStartX, this.y - this.game.renderStartY);
-		} else if ( this.dirY != 0 ) {
-		//console.log(this.frame);
-			this.gfxUpDown[this.frame].render(context, this.x - this.game.renderStartX, this.y - this.game.renderStartY);
+		var screenX = this.x - this.game.renderStartX;
+		var screenY = this.y - this.game.renderStartY;
+
+		if (  this.game.state === 'game' ) {
+			var frame = this.game.ticks % 24 < 12 ? 1 : 0;
+			if ( this.dirX < 0 ) {
+				this.gfxLeft[frame].render(context, screenX, screenY);
+			} else if ( this.dirX > 0 ) {
+				this.gfxRight[frame].render(context, screenX, screenY);
+			} else if ( this.dirY != 0 ) {
+				this.gfxUpDown[frame].render(context, screenX, screenY);
+			} else {
+				this.gfx.render(context, screenX, screenY);
+			}
 		} else {
-			this.gfx.render(context, this.x - this.game.renderStartX, this.y - this.game.renderStartY);
+			this.gfx.render(context, screenX, screenY);
 		}
 	};
 
@@ -343,22 +423,68 @@
 	Grass.prototype = Object.create(Entity.prototype);
 	Grass.prototype.constructor = Grass;
 
+
+	/* Gem
+	 ===============================================================*/
+	function Gem(g, gfx, x, y, w, h) {
+		Entity.prototype.constructor.call(this, g, gfx, x, y, w, h);
+		this.isWalkable = true;
+		this.value = 0;
+		this.collectSound = '';
+	}
+	Gem.prototype = Object.create(Entity.prototype);
+	Gem.prototype.constructor = Gem;
+	Gem.prototype.playCollectSound = function() {
+		this.game.audioHandler.play(this.collectSound);
+		this.game.audioHandler.playSequence(this.collectSound);
+	};
+
 	/* Emerald
 	 ===============================================================*/
 	function Emerald(g, x, y){
-		Entity.prototype.constructor.call(this, g, new Gfx(g.sprite, 0, 16, 16, 16), x, y, TILE_SIZE, TILE_SIZE);
-		this.isWalkable = true;
+		Gem.prototype.constructor.call(this, g, new Gfx(g.sprite, 0, 16, 16, 16), x, y, TILE_SIZE, TILE_SIZE);
+		this.value = 1;
+		this.collectSound = 'emerald';
+		g.gemCount+=this.value;
+
+		// emerald sound
+		if ( !g.audioHandler.has('emerald') ) {
+			g.audioHandler.add( 'emerald', 5,
+				[
+					[0,,0.0881,0.4996,0.2593,0.8492,,,,,,0.2308,0.6901,,,,,,1,,,,,0.5]
+				]
+			);
+		}
+
+
 	}
-	Emerald.prototype = Object.create(Entity.prototype);
+	Emerald.prototype = Object.create(Gem.prototype);
 	Emerald.prototype.constructor = Emerald;
 
 	/* Ruby
 	 ===============================================================*/
 	function Ruby(g, x, y){
-		Entity.prototype.constructor.call(this, g, new Gfx(g.sprite, 0, 64, 16, 16), x, y, TILE_SIZE, TILE_SIZE);
-		this.isWalkable = true;
+		Gem.prototype.constructor.call(this, g, new Gfx(g.sprite, 0, 64, 16, 16), x, y, TILE_SIZE, TILE_SIZE);
+		this.value = 5;
+		this.collectSound = 'ruby';
+		g.gemCount+=this.value;
+
+		// ruby sound
+		if ( !g.audioHandler.hasSequence('ruby') ) {
+			g.audioHandler.addSequence( 'ruby', new Sequencer({
+				loopSpeed: 100,
+				instruments: g.audioHandler.instruments,
+				loops: [],
+				song: [
+					[{n:'beep',p:1.24}],
+					[{n:'beep',p:1.3}],
+					[{n:'beep',p:1.6}]
+				],
+				loop: false
+			}));
+		}
 	}
-	Ruby.prototype = Object.create(Entity.prototype);
+	Ruby.prototype = Object.create(Gem.prototype);
 	Ruby.prototype.constructor = Ruby;
 
 	/* Explosion
@@ -399,9 +525,10 @@
 		this.isWalkable = true;
 	};
 	Door.prototype.render = function(context) {
-		this.frame = ( this.substep > this.stepsPerTile / 2 ) ? 1 : 0;
-		if ( this.isOpen ) {
-			this.gfxOpen[this.frame].render(context, this.x - this.game.renderStartX, this.y - this.game.renderStartY);
+		if ( this.game.state === 'game' && this.isOpen ) {
+			var frame = this.game.ticks % 32 < 16 ? 1 : 0;
+			//this.frame = ( this.substep > this.stepsPerTile / 2 ) ? 1 : 0;
+			this.gfxOpen[frame].render(context, this.x - this.game.renderStartX, this.y - this.game.renderStartY);
 		} else {
 			this.gfx.render(context, this.x - this.game.renderStartX, this.y - this.game.renderStartY);
 		}
@@ -426,12 +553,16 @@
 		this.context.msImageSmoothingEnabled = false;
 		this.context.imageSmoothingEnabled = false;
 		this.font = null;
+		this.ticks = 0;
 
 		this.renderStartX = 0;
 		this.renderStartY = 0;
 
 		//self.canvas.width  = 1024; //window.innerWidth;
 		//self.canvas.height = 768; //window.innerHeight;
+
+		this.isReversed = false;
+		this.isMuted = false;
 
 		this.inputHandler = new InputHandler();
 		this.state = 'init';
@@ -444,88 +575,130 @@
 
 		this.audioHandler = new AudioHandler();
 
-		/*
-		* Sound Arguments are:
-		* ====================================================
-		*                a: waveType
-		*                b: attackTime
-		*                c: sustainTime
-		*                d: sustainPunch
-		*                e: decayTime
-		*                f: startFrequency
-		*                g: minFrequency
-		*                h: slide
-		*                i: deltaSlide
-		*                j: vibratoDepth
-		*                k: vibratoSpeed
-		*                l: changeAmount
-		*                m: changeSpeed
-		*                n: squareDuty
-		*                o: dutySweep
-		*                p: repeatSpeed
-		*                q: phaserOffset
-		*                r: phaserSweep
-		*                s: lpFilterCutoff
-		*                t: lpFilterCutoffSweep
-		*                u: lpFilterResonance
-		*                v: hpFilterCutoff
-		*                w: hpFilterCutoffSweep
-		*                x: masterVolume
-		*/
-
-		// emerald sound
-		this.audioHandler.add( 'emerald', 5,
-			[
-				[0,,0.01,0.4394,0.3103,0.8765,,,,,,0.3614,0.5278,,,,,,1,,,,,0.5]
-				//[1,,0.01,0.4394,0.3103,0.8765,,,,,,0.3614,0.5278,,,,,,1,,,,,0.5],
-				//[2,,0.01,0.4394,0.3103,0.8765,,,,,,0.3614,0.5278,,,,,,1,,,,,0.5],
-				//[3,,0.01,0.4394,0.3103,0.8765,,,,,,0.3614,0.5278,,,,,,1,,,,,0.5]
+		// Milliseconds per beat.
+		var loopSpeed = 250;
+		// Predefined loops. Saves duplication in the song.
+		var loops = {
+			drumloop: [
+				[],
+				[],
+				['cymbal'],
+				[]
 			]
-		);
+		};
+		// The song! Put instruments/loops in here.
+		var song = [
+			['drumloop', 'wave'],
+			[{n:'wave',p:1.06}],
+			[],
+			[{n:'wave',p:1.06}],
+			['drumloop', {n:'wave', p: 1}],
+			[],
+			[],
+			[{n:'wave',p:1.24}],
+			['drumloop'],
+			[{n:'wave',p:1.3}],
+			[],
+			[],
+			['drumloop', 'bass'],
+			[],
+			[],
+			[],
+			['drumloop', 'bass'],
+			[],
+			[],
+			[],
+			['drumloop'],
+			[{n:'wave',p:0.88}],
+			[{n:'wave',p:0.94}],
+			[],
+			['drumloop'],
+			[{n:'wave',p:0.94}],
+			[{n:'wave',p:0.88}],
+			[],
+			['drumloop'],
+			[],
+			[],
+			[],
+			['drumloop', 'bass'],
+			[],
+			[],
+			[],
+			['drumloop', 'bass'],
+			[],
+			[],
+			[],
+			['drumloop'],
+			[],
+			[],
+			[]
+		];
+
+		// Fire up a sequencer with all of the above
+		this.audioHandler.addSequence('backgroundmusic', new Sequencer({
+			loopSpeed: loopSpeed, // milliseconds per beat
+			instruments: this.audioHandler.instruments, // The Audio elements
+			loops: loops, // Loops
+			song: song, // The actual song
+			loop: true, // Loop over and over
+			buffer: 1.4 // seconds buffer. ~min Chrome lets us have in a background tab
+		}));
+		this.audioHandler.playSequence('backgroundmusic');
+
 		// emerald sound
 		this.audioHandler.add( 'explosion', 5,
 			[
 				[3,,0.131,0.5546,0.4945,0.1142,,,,,,,,,,0.6184,-0.1018,-0.1237,1,,,,,0.5]
+
+			]
+		);
+		// open door
+		this.audioHandler.add('opendoor', 1,
+			[
+				[1,,0.2125,,0.4813,0.4889,,0.2423,,,,,,,,0.7641,,,1,,,,,0.4935]
+			]
+		);
+
+		// stone falls to the ground
+		this.audioHandler.add('stone', 5,
+			[
+				[3,,0.1535,0.2135,0.0535,0.0535,,-0.2463,,,,,,,,,0.0328,-0.1877,0.8134,,,,,0.4935]
 			]
 		);
 
 		this.audioHandler.add('walk', 1,
 			[
-				[3,,0.1017,0.0535,0.0782,0.0735,,-0.536,,,,,,,,,,,1,,,0.0436,,0.1735],
-				//[2,,0.1257,0.1265,0.0542,0.1935,0.0535,-0.933,-0.493,0.0735,0.2135,-0.547,0.1735,0.0379,0.0015,0.1065,-0.773,0.453,0.2535,-0.667,0.8865,0.0665,-0.813,0.29]
-				//[2,,0.1396,0.2205,0.0403,0.2718,0.0664,-0.6762,0.08,0.0374,0.0259,-0.0392,,0.0379,0.0015,0.0231,-0.0831,0.037,0.9115,-0.0838,0.0382,0.0236,-0.0658,0.29]
+				//[10, 0, 0.1, "sine", 0.2, 0, 0, 40, false, 0, 20,,]
+				[3,,0.1017,0.0535,0.0782,0.0735,,-0.536,,,,,,,,,,,1,,,0.0436,,0.2735],
 			]
 		);
 
 		this.audioHandler.add('reverse', 2,
 			[
-				[2,,0.175,,0.4147,0.3131,,0.2175,,,,,,,,0.7216,,,1,,,,,0.1735]
-				//[3,0.0323,0.2485,0.0299,0.283,0.3206,0.05,0.5595,0.0932,,0.0268,-0.0745,,0.0952,-0.0565,0.7068,-0.068,0.0111,0.964,-0.0807,0.07,0.0512,0.1103,0.1735]
+				[2,,0.175,,0.4147,0.3131,,0.2175,,,,,,,,0.7216,,,1,,,,,0.2735]
 			]
 		);
 
 
-		this.pendingExplodePositions = [];
 		this.elements = [];
 		this.rElements = [];
-		this.isReversed = false;
 
-		this.emeraldCount = 0;
+		this.gemCount = 0;
 
 		var map = [
 			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
 			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
-			'g','g','b','X','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
-			'g','g','r','X','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
-			'g','g','s','X','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
-			'g','g','s','X','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
-			'g','g','g','X','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
-			'g','g','g','X','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
-			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
-			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
+			'g','g','e','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
 			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
 			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
 			'g','g','d','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
+			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
+			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
+			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
+			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
+			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
+			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
+			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
 			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
 			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
 			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
@@ -542,76 +715,78 @@
 
 		if ( map ) {
 			for ( var i = 0; i < map.length; i++ ) {
+				this.elements.push(null);
+				this.rElements.push(null);
+			}
+			for ( var i = 0; i < map.length; i++ ) {
 				var el = null;
 				var rel = null;
-				var posX = (i%MAP_SIZE_X) * TILE_SIZE;
-				var posY = parseInt(i/MAP_SIZE_X, 10) * TILE_SIZE;
+				var x = (i%MAP_SIZE_X) * TILE_SIZE;
+				var y = parseInt(i/MAP_SIZE_X, 10) * TILE_SIZE;
 				switch ( map[i] ) {
 					case 'g':
-						el = new Grass(this, posX, posY);
-						rel = null;
+						this.setElementAtIndex(i, new Grass(this, x, y));
 						break;
 					case 'b':
-						el = new Bomb(this, posX, posY);
-						rel = new Ruby(this, posX, posY);
-						this.emeraldCount+=5;
+						this.setElementAtIndex(i, new Bomb(this, x, y));
 						break;
 					case 's':
-						el = new Stone(this, posX, posY);
-						rel = new Emerald(this, posX, posY);
-						this.emeraldCount++;
+						this.setElementAtIndex(i, new Stone(this, x, y));
 						break;
 					case 'e':
-						el = new Emerald(this, posX, posY);
-						rel = new Stone(this,posX, posY);
-						this.emeraldCount++;
+						this.setElementAtIndex(i, new Emerald(this, x, y));
 						break;
 					case 'r':
-						el = new Ruby(this, posX, posY);
-						rel = new Bomb(this,posX, posY);
-						this.emeraldCount+=5;
+						this.setElementAtIndex(i, new Ruby(this, x, y));
 						break;
 					case 'd':
-						el = new Door(this, posX, posY);
-						rel = new Door(this,posX, posY);
+						this.setElementAtIndex(i, new Door(this, x, y));
 						break;
 					default: break;
 				}
-				this.elements[i] = el;
-				this.rElements[i] = rel;
 			}
-			this.emeraldTarget = this.emeraldCount;
+			this.gemTarget = this.gemCount;
 
 		} else {
 
+			for ( var i = 0; i < MAP_SIZE_Y*MAP_SIZE_X; i++ ) {
+				this.elements.push(null);
+				this.rElements.push(null);
+			}
+
+			var index = 0;
 			for ( var j = 0; j < MAP_SIZE_Y; j++ ) {
 				for ( var i = 0; i < MAP_SIZE_X; i++ ) {
-					var rnd = Math.random();
 
-					//todo: add reverses
+					var rnd = Math.random();
+					var x = i*TILE_SIZE;
+					var y = j*TILE_SIZE;
+
 					if ( rnd > 0.99 ) {
-						this.elements.push(new Ruby(this, i*TILE_SIZE, j*TILE_SIZE));
-						this.emeraldCount+=5;
-						this.rElements.push(new Bomb(this, i*TILE_SIZE, j*TILE_SIZE));
+						this.setElementAtIndex(index, new Ruby(this, x, y));
+						//this.rElements.push(new Bomb(this, i*TILE_SIZE, j*TILE_SIZE));
 					} else if ( rnd > 0.97 ) {
-						this.rElements.push(new Grass(this, i*TILE_SIZE, j*TILE_SIZE));
-						this.elements.push(null);
+						this.setElementAtIndex(index, null);
+						//this.rElements.push(new Grass(this, i*TILE_SIZE, j*TILE_SIZE));
+						//this.elements.push(null);
 					} else if ( rnd > 0.9 ) {
-						this.elements.push(new Bomb(this, i*TILE_SIZE, j*TILE_SIZE));
-						this.rElements.push(new Ruby(this, i*TILE_SIZE, j*TILE_SIZE));
-						this.emeraldCount+=5;
+						this.setElementAtIndex(index, new Bomb(this, x, y));
+						//this.elements.push(new Bomb(this, i*TILE_SIZE, j*TILE_SIZE));
+						//this.rElements.push(new Ruby(this, i*TILE_SIZE, j*TILE_SIZE));
 					} else if ( rnd > 0.8 ) {
-						this.elements.push(new Emerald(this, i*TILE_SIZE, j*TILE_SIZE));
-						this.rElements.push(new Stone(this, i*TILE_SIZE, j*TILE_SIZE));
-						this.emeraldCount++;
+						this.setElementAtIndex(index, new Emerald(this, x, y));
+						//this.elements.push(new Emerald(this, i*TILE_SIZE, j*TILE_SIZE));
+						//this.rElements.push(new Stone(this, i*TILE_SIZE, j*TILE_SIZE));
 					} else if ( rnd > 0.7 ) {
-						this.elements.push(new Stone(this, i*TILE_SIZE, j*TILE_SIZE));
-						this.rElements.push(new Emerald(this, i*TILE_SIZE, j*TILE_SIZE));
-						this.emeraldCount++;
+						this.setElementAtIndex(index, new Stone(this, x, y));
+						//this.elements.push(new Stone(this, i*TILE_SIZE, j*TILE_SIZE));
+						//this.rElements.push(new Emerald(this, i*TILE_SIZE, j*TILE_SIZE));
 					} else {
-						this.elements.push(new Grass(this, i*TILE_SIZE, j*TILE_SIZE));
-						this.rElements.push(null);
+						this.setElementAtIndex(index, new Grass(this, x, y));
+						//this.elements.push(new Grass(this, i*TILE_SIZE, j*TILE_SIZE));
+						//this.rElements.push(null);
 					}
+					index++;
 				}
 			}
 			// generate a door at a random position
@@ -620,14 +795,16 @@
 			this.setElementAtIndex(randY*MAP_SIZE_X+randX, new Door(this, randX*TILE_SIZE, randY*TILE_SIZE));
 			//console.log('door at : '+randX+'/'+randY);
 
-			this.emeraldTarget = (this.emeraldCount * 0.75) | 0;
+			this.gemTarget = (this.gemCount * 0.75) | 0;
 
 		}
 
-		this.player = new Player(this, 0*TILE_SIZE, 0*TILE_SIZE);
+		this.player = new Player(this, 0, 0);
 
 		this.lastUpdate = new Date().getTime();
 		var tick = function() {
+
+			self.ticks++;
 
 			if ( self.state === 'init' ) {
 				// do nothing
@@ -637,6 +814,7 @@
 				self.update();
 				self.render();
 			} else if ( self.state === 'won' ) {
+				self.handleInput();
 				self.render();
 			}
 
@@ -724,16 +902,22 @@
 
 		openDoors: function() {
 			var self = this;
-			self.elements.forEach(function(item, idx, arr) {
-				if ( item instanceof Door ) {
+			var openedAnyDoor = false;
+			self.elements.forEach(function(item) {
+				if ( item instanceof Door && !item.isOpen ) {
 					item.open();
+					openedAnyDoor = true;
 				}
 			});
-			self.rElements.forEach(function(item, idx, arr) {
-				if ( item instanceof Door ) {
+			self.rElements.forEach(function(item) {
+				if ( item instanceof Door && !item.isOpen ) {
 					item.open();
+					openedAnyDoor = true;
 				}
 			});
+			if ( openedAnyDoor ) {
+				self.audioHandler.play('opendoor');
+			}
 
 		},
 
@@ -746,97 +930,70 @@
 
 			self.inputHandler.tick();
 
+			if ( self.state === 'game' && self.player.substep === 0 ) {
 
-			if ( self.player.substep === 0 || self.player.substep === self.player.stepsPerTile ) {
-				self.player.dirX = 0;
-				self.player.dirY = 0;
-
-				if ( self.inputHandler.keys[self.inputHandler.KEYS.UP].isDown ) {
+				if ( self.inputHandler.isDown(VK_UP) ) {
+					self.player.dirX = 0;
 					self.player.dirY = -1;
-				} else if ( self.inputHandler.keys[self.inputHandler.KEYS.DOWN].isDown ) {
+				} else if ( self.inputHandler.isDown(VK_DOWN) ) {
+					self.player.dirX = 0;
 					self.player.dirY = 1;
-				} else {
+				} else if ( self.inputHandler.isDown(VK_LEFT) ) {
+					self.player.dirX = -1;
 					self.player.dirY = 0;
-
-					if ( self.inputHandler.keys[self.inputHandler.KEYS.LEFT].isDown ) {
-						self.player.dirX = -1;
-					} else if ( self.inputHandler.keys[self.inputHandler.KEYS.RIGHT].isDown ) {
-						self.player.dirX = 1;
-					} else {
-						self.player.dirX = 0;
-					}
+				} else if ( self.inputHandler.isDown(VK_RIGHT) ) {
+					self.player.dirX = 1;
+					self.player.dirY = 0;
+				} else {
+					self.player.dirX = 0;
+					self.player.dirY = 0;
 				}
-			}
 
-			if ( self.inputHandler.keys[self.inputHandler.KEYS.R].isPressed ) {
-				if ( self.player.substep === 0 ) {
+				if ( self.inputHandler.isPressed(VK_R) ) {
 					self.isReversed = !self.isReversed;
 					self.audioHandler.play('reverse');
 				}
+
+			}
+
+			if ( self.inputHandler.isPressed(VK_M) ) {
+				self.isMuted = !self.isMuted;
+				self.audioHandler.mute(self.isMuted);
 			}
 
 		},
 
-		maybeCreateExplosion: function(px, py) {
-
+		maybeCreateExplosion: function(x, y) {
 
 			var self = this;
 
 			// check if we hit a bomb, if yes, explode them too
-			//var elIndex = y*MAP_SIZE_X+x;
 
-			var el = self.getElementAtPos(px,py);
+			var el = self.getElementAtPos(x,y);
 
 			if ( typeof el === 'undefined' ) {
 				return;
 			}
+
+			var chkEl = el instanceof Dummy ? el.ref : el;
+
 			// if there is already an explosion, continue
-			if ( el instanceof Explosion ) {
+			if ( chkEl instanceof Explosion ) {
 				return;
 			}
 
-			// if a dummy, then look inside
-			if ( el instanceof Dummy ) {
-				var innerEl = el.ref;
-				if ( innerEl instanceof Explosion ) {
-					// should not happen, but if, then continue
-					return;
-				}
 
-				// if there is a bomb, then create an explosion at the position where the thing will be falling to
-				if ( innerEl instanceof Bomb ) {
-					self.createExplosion(px, py);
-				} else {
-
-					if ( innerEl !== null ) {
-						// delete original element
-						var pos = innerEl.getActualPosition();
-						self.deleteElementAtIndex(pos.y*MAP_SIZE_X+pos.x);
-					}
-				}
-
-			} else {
-
-				// it is not a dummy
-
-				// if there is a bomb, then create an explosion at the position where the thing will be falling to
-				if ( el instanceof Bomb ) {
-
-					self.createExplosion(px, py);
-				} else {
-
-					if ( el !== null ) {
-						// delete original element
-						var pos = el.getActualPosition();
-						self.deleteElementAtIndex(pos.y*MAP_SIZE_X+pos.x);
-					}
-				}
-
+			// if there is a bomb, then create an explosion at the position where the thing will be falling to
+			if ( chkEl instanceof Bomb ) {
+				self.createExplosion(x, y);
+			} else if ( chkEl !== null ) {
+				// delete original element
+				var pos = chkEl.getActualPosition();
+				self.deleteElementAtIndex(pos.y*MAP_SIZE_X+pos.x);
 			}
 
-
 			// add explosion entity at the place
-			self.setElementAtIndex(py*MAP_SIZE_X+px, new Explosion(self, px*TILE_SIZE, py*TILE_SIZE));
+			self.setElementAtIndex(y*MAP_SIZE_X+x, new Explosion(self, x*TILE_SIZE, y*TILE_SIZE));
 
 		},
 
@@ -889,6 +1046,7 @@
 					self.state = 'won';
 					self.player.dirX = 0;
 					self.player.dirY = 0;
+					self.audioHandler.stopSequence('backgroundmusic');
 					return;
 				}
 			}
@@ -900,26 +1058,16 @@
 					return;
 				}
 
-				if ( item instanceof Door ) {
-					if ( item.substep >= item.stepsPerTile ) {
-						item.substep = 0;
-					} else {
-						item.substep++;
-					}
+				if ( item instanceof Explosion && --item.ticktick === 0 ) {
+					self.deleteElementAtIndex(idx);
+					return;
 				}
-				if ( item instanceof Explosion ) {
-					item.ticktick--;
-					if ( item.ticktick === 0 ) {
-						self.deleteElementAtIndex(idx);
-						return;
-					}
-				}
+
 				var pos = item.getActualPosition();
-				if ( item instanceof Stone || item instanceof Bomb ) {
+				if ( (item instanceof Stone || item instanceof Bomb) && item.substep === 0 ) {
 					// get element below the stone:
 					var elBelow = self.getElementAtPos(pos.x, pos.y+1);
 					if ( elBelow === null
-						&& item.substep === 0
 						&& ( !(playerPosBefore.x === pos.x && playerPosBefore.y === pos.y+1) || item.wasFalling )
 					) {
 						// let the stone fall down
@@ -931,7 +1079,7 @@
 							self.setElementAtIndex((pos.y+1)*MAP_SIZE_X+pos.x, new Dummy(item)); // item will fall there eventually!
 						}
 
-					} else if ( (elBelow instanceof Stone || elBelow instanceof Bomb)  && item.substep === 0 && !item.isFalling ) {
+					} else if ( (elBelow instanceof Stone || elBelow instanceof Bomb) && !item.isFalling ) {
 
 						var elLeft = self.getElementAtPos(pos.x-1, pos.y);
 						var elLeftBelow = self.getElementAtPos(pos.x-1, pos.y+1);
@@ -973,38 +1121,43 @@
 				}
 				if (item.wasFalling) {
 					item.wasFalling = false;
+
+					if ( item instanceof Stone ) {
+						self.audioHandler.play('stone');
+					}
 				}
 			});
 
-			elementsToUpdate.forEach(function(item, idx, arr) {
+			elementsToUpdate.forEach(function(item, idx) {
 				if ( item === null ) {
 					return;
 				}
+
 				if ( item.dirX === 0 && item.dirY === 0 ) {
 					return;
 				}
-
 				item.move();
-				item.substep++;
-				if ( item.substep >= item.stepsPerTile ) {
-					item.substep = 0;
-					item.dirX = 0;
-					item.dirY = 0;
+				item.substep = item.substep < item.stepsPerTile-1 ? item.substep+1 : 0;
 
-					// stop falling
-					if ( item instanceof Stone || item instanceof Bomb ) {
-						if ( item.isFalling ) {
-							item.isFalling = false;
-							item.wasFalling = true;
-						}
-					}
-					var pos = item.getActualPosition();
-					var elIdx = pos.y*MAP_SIZE_X+pos.x;
 
-					self.deleteElementAtIndex(idx);
-					self.setElementAtIndex(elIdx, item);
-
+				if ( item.substep > 0 ) {
+					return;
 				}
+
+				item.dirX = 0;
+				item.dirY = 0;
+
+				// stop falling
+				if ( (item instanceof Stone || item instanceof Bomb) && item.isFalling ) {
+					item.isFalling = false;
+					item.wasFalling = true;
+				}
+
+				var pos = item.getActualPosition();
+
+				self.deleteElementAtIndex(idx);
+				self.setElementAtIndex(pos.y*MAP_SIZE_X+pos.x, item);
+
 			});
 
 
@@ -1017,43 +1170,24 @@
 				playerHasMoved = true;
 
 				// player moves each field in 8 steps
-				self.player.substep++;
-				if ( self.player.substep >= self.player.stepsPerTile ) {
-					self.player.substep = 0;
-				}
+				self.player.substep = self.player.substep < self.player.stepsPerTile-1 ? self.player.substep+1 : 0;
 			}
 
-			// player started moving. lets see if he hits the bounds of the map, if yes, then unmove and set substep to 0;
+			var unmove = false;
 			if ( self.player.substep === 1 ) {
 
-				var unmove = false;
+
+				// player started moving. lets see if he hits the bounds of the map, if yes, then unmove and set substep to 0;
 				if ( self.player.x <= 0 && self.player.dirX < 0 ) {
 					unmove = true;
-				}
-				if ( self.player.x >= (MAP_SIZE_X-1)*TILE_SIZE && self.player.dirX > 0 ) {
+				} else if ( self.player.x >= (MAP_SIZE_X-1)*TILE_SIZE && self.player.dirX > 0 ) {
 					unmove = true;
-				}
-				if ( self.player.y <= 0 && self.player.dirY < 0 ) {
+				} else if ( self.player.y <= 0 && self.player.dirY < 0 ) {
 					unmove = true;
-				}
-				if ( self.player.y >= (MAP_SIZE_Y-1)*TILE_SIZE && self.player.dirY > 0 ) {
+				} else if ( self.player.y >= (MAP_SIZE_Y-1)*TILE_SIZE && self.player.dirY > 0 ) {
 					unmove = true;
-				}
-
-				if ( unmove ) {
-					// just dont move..
-					self.player.unmove();
-					self.player.substep = 0;
-					playerHasMoved = false;
-				}
-
-			}
-
-			// player started moving. check if some other elements must move and check if the player can even move!
-			if ( self.player.substep === 1 ) {
-
-				var unmove = false;
-				if ( self.player.dirX !== 0 ) {
+				} else if ( self.player.dirX !== 0 ) {
+					// check left right elements if player can move there
 					// moving horizontally
 					var nextEl= self.getElementAtPos(playerPosBefore.x+self.player.dirX, playerPosBefore.y);
 					var nextNextEl = self.getElementAtPos(playerPosBefore.x+self.player.dirX+self.player.dirX, playerPosBefore.y);
@@ -1077,6 +1211,7 @@
 						unmove = true;
 					}
 				} else if ( self.player.dirY !== 0 ) {
+					// check top/bottom elements
 					// moving vertically
 
 					var nextEl= self.getElementAtPos(playerPosBefore.x, playerPosBefore.y+self.player.dirY);
@@ -1092,13 +1227,13 @@
 					}
 				}
 
+			}
 
-				if ( unmove ) {
-					// just dont move..
-					self.player.unmove();
-					self.player.substep = 0;
-					playerHasMoved = false;
-				}
+			if ( unmove ) {
+				// just dont move..
+				self.player.unmove();
+				self.player.substep = 0;
+				playerHasMoved = false;
 			}
 
 
@@ -1112,33 +1247,20 @@
 			var elIndex = playerPosAfter.y*MAP_SIZE_X+playerPosAfter.x;
 			var elAtPlayer= self.getElementAtPos(playerPosAfter.x, playerPosAfter.y);
 			if ( elAtPlayer instanceof Grass ) {
-				self.deleteElementAtIndex(elIndex);
-				//console.log('ate some grass');
-			} else
-			// todo : refactor so that emeralds and ruby act the same, only give different points
-			if ( elAtPlayer instanceof Emerald ) {
 
 				self.deleteElementAtIndex(elIndex);
-				self.player.emeraldCount++;
-				if ( self.player.emeraldCount >= self.emeraldTarget ) {
+				//console.log('ate some grass');
+
+			} else if ( elAtPlayer instanceof Gem ) {
+
+				self.player.gemCount+= elAtPlayer.value;
+				self.deleteElementAtIndex(elIndex);
+				if ( self.player.gemCount >= self.gemTarget ) {
 					// open all doors
 					self.openDoors();
 				}
 				//console.log('got an emerald');
-
-				self.audioHandler.play('emerald');
-
-			} else if ( elAtPlayer instanceof Ruby ) {
-
-				self.deleteElementAtIndex(elIndex);
-				self.player.emeraldCount+=5;
-				if ( self.player.emeraldCount >= self.emeraldTarget ) {
-					// open all doors
-					self.openDoors();
-				}
-				//console.log('got a ruby!');
-
-				self.audioHandler.play('emerald');
+				elAtPlayer.playCollectSound();
 
 			}
 
@@ -1164,7 +1286,7 @@
 			}
 
 			var elementsToRender = self.isReversed ? self.rElements : self.elements;
-			elementsToRender.forEach(function(item, idx, arr) {
+			elementsToRender.forEach(function(item) {
 				if ( item === null ) {
 					return;
 				}
@@ -1179,8 +1301,8 @@
 					return;
 				}
 
-
 				item.render(self.context);
+
 			});
 
 			//this.font.renderText(context, 'hallo\n\nabcdefghi  jklmnopqrstuvwxyz', 50,50);
@@ -1208,7 +1330,7 @@
 			} else {
 				self.font.renderText(
 					self.context,
-					"Emeralds: "+ self.player.emeraldCount + '/' + self.emeraldTarget,
+					"Gems: "+ self.player.gemCount + '/' + self.gemTarget,
 					FONT_SIZE/2,
 					(VISIBLE_HEIGHT)*TILE_SIZE + (TILE_SIZE/2 - FONT_SIZE/2)
 				);
