@@ -184,6 +184,8 @@ function SfxrSynth() {
 	this.synthWave = function(buffer, length) {
 		// Shorter reference
 		var p = this._params;
+		// used often, store in variable to save some bytes of filesize
+		var N1024 = 1024;
 
 		// If the filters are active
 		var _filters = p['s'] != 1 || p['v'],
@@ -246,20 +248,21 @@ function SfxrSynth() {
 			_repeatTime       = 0, // Counter for the repeats
 			_sample,               // Sub-sample calculated 8 times per actual sample, averaged out to get the super sample
 			_superSample,          // Actual sample writen to the wave
-			_vibratoPhase     = 0; // Phase through the vibrato sine wave
+			_vibratoPhase     = 0, // Phase through the vibrato sine wave
 
 		// Buffer of wave values used to create the out of phase second wave
-		var _phaserBuffer = new Array(1024),
+			_phaserBuffer = new Array(N1024),
 		// Buffer of random values used to generate noise
-			_noiseBuffer  = new Array(32);
-		for (var i = _phaserBuffer.length; i--; ) {
+			_noiseBuffer  = new Array(32),
+			i;
+		for ( i = _phaserBuffer.length; i--; ) {
 			_phaserBuffer[i] = 0;
 		}
-		for (var i = _noiseBuffer.length; i--; ) {
+		for ( i = _noiseBuffer.length; i--; ) {
 			_noiseBuffer[i] = Math.random() * 2 - 1;
 		}
 
-		for (var i = 0; i < length; i++) {
+		for ( i = 0; i < length; i++) {
 			if (_finished) {
 				return i;
 			}
@@ -350,8 +353,8 @@ function SfxrSynth() {
 				_phaserInt = _phaserOffset | 0;
 				if (_phaserInt < 0) {
 					_phaserInt = -_phaserInt;
-				} else if (_phaserInt > 1023) {
-					_phaserInt = 1023;
+				} else if (_phaserInt > N1024-1) {
+					_phaserInt = N1024-1;
 				}
 			}
 
@@ -425,8 +428,8 @@ function SfxrSynth() {
 
 				// Applies the phaser effect
 				if (_phaser) {
-					_phaserBuffer[_phaserPos % 1024] = _sample;
-					_sample += _phaserBuffer[(_phaserPos - _phaserInt + 1024) % 1024];
+					_phaserBuffer[_phaserPos % N1024] = _sample;
+					_sample += _phaserBuffer[(_phaserPos - _phaserInt + N1024) % N1024];
 					_phaserPos++;
 				}
 
