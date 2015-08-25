@@ -1874,6 +1874,9 @@
 
 		startEdit: function() {
 
+			this.messages.push(new Message(this, 'PRESS SPACE to switch elements.', 500));
+			this.messages.push(new Message(this, 'PRESS/HOLD E to set elements.', 500));
+
 			this.startTime = new Date().getTime();
 			this.audioHandler.playSequence(AUDIO_BG_MUSIC);
 
