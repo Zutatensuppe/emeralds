@@ -1100,32 +1100,8 @@
 
 			if ( self.state === Game.STATE_EDIT ) {
 
-				var gfx = new Gfx(self.sprite, 32, 80, TILE_SIZE, TILE_SIZE);
-
-				//
-				//self.renderStartX = self.player.x - VISIBLE_WIDTH*HALF_TILE_SIZE;
-				//self.renderStartY = self.player.y - VISIBLE_WIDTH*HALF_TILE_SIZE;
-				//if ( self.renderStartX < 0 ) {
-				//	self.renderStartX = 0;
-				//}
-				//if ( self.renderStartY < 0 ) {
-				//	self.renderStartY = 0;
-				//}
-				//if ( self.renderStartX+VISIBLE_WIDTH*TILE_SIZE > MAP_SIZE_X*TILE_SIZE ) {
-				//	self.renderStartX = MAP_SIZE_X*TILE_SIZE - VISIBLE_WIDTH*TILE_SIZE;
-				//}
-				//if ( self.renderStartY+VISIBLE_HEIGHT*TILE_SIZE > MAP_SIZE_Y*TILE_SIZE ) {
-				//	self.renderStartY = MAP_SIZE_Y*TILE_SIZE - VISIBLE_HEIGHT*TILE_SIZE;
-				//}
-
 				// draw grid lines
 				self.context.strokeStyle = '#555';
-				//var xOffset = 0;
-				//var yOffset = 0;
-				//if ( self.player.dirX > 0 ) xOffset = -self.player.substep*self.player.speed;
-				//if ( self.player.dirX < 0 ) xOffset = self.player.substep*self.player.speed;
-				//if ( self.player.dirY > 0 ) yOffset = -self.player.substep*self.player.speed;
-				//if ( self.player.dirY < 0 ) yOffset = self.player.substep*self.player.speed;
 				// draw with offset of the player!
 				for ( var i = TILE_SIZE-self.renderStartX; i < self.canvas.width+self.renderStartX; i+=TILE_SIZE ) {
 					self.context.beginPath();
