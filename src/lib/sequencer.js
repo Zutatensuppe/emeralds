@@ -17,6 +17,14 @@ function Sequencer(opts){
 	_this.buffer = opts.buffer || 0.2;
 	_this.loopSpeed = opts.loopSpeed;
 
+
+	var gainNode = ctx.createGain();
+	gainNode.connect(ctx.destination);
+	var gainInterval = null;
+
+
+	this.currentSources = [];
+
 	var instruments, song, startTime;
 
 	this.initLoops = function(opts){
@@ -53,23 +61,43 @@ function Sequencer(opts){
 	this.initLoops(opts);
 
 	function playSound(instrument, time){
-		if ( _this.isMuted ) {
-			// nothing
-			console.log('nothing');
-		} else {
-			var source = ctx.createBufferSource(); // creates a sound source
-			var buffer = instruments[instrument.n || instrument];
-			source.playbackRate.value = instrument.p || 1;
-			source.buffer = buffer;                // tell the source which sound to play
-			source.connect(ctx.destination);       // connect the source to the context's destination (the speakers)
-
-			var start = time || 0;
-			source.start(start);
+		var source = ctx.createBufferSource(); // creates a sound source
+		var buffer = instruments[instrument.n || instrument];
+		source.playbackRate.value = instrument.p || 1;
+		source.buffer = buffer;   // tell the source which sound to play
+		source.connect(gainNode); // connect to gainNode in order to be able to mute the audio
+		source.start(time || 0);
+		// push source to all sources array to be able to stop
+		_this.currentSources.push(source);
+		source.onended = function(e) {
+			_this.currentSources.forEach(function(src, idx, arr) {
+				if ( src === e.srcElement ) {
+					arr.splice(idx,1);
+					return false;
+				}
+			});
 		}
 	}
 
 	this.mute = function( mute ) {
 		this.isMuted = mute;
+
+		if ( mute ) {
+			if ( gainInterval ) {
+				clearInterval(gainInterval);
+			}
+			gainNode.gain.value = 0;
+		} else {
+			// slowly gain volume until 1
+			gainInterval = setInterval(function() {
+				gainNode.gain.value+=0.1;
+				if ( gainNode.gain.value >= 1 ) {
+					gainNode.gain.value = 1;
+					clearInterval(gainInterval);
+					gainInterval = null;
+				}
+			},100);
+		}
 	};
 
 	this.play = function(){
@@ -89,16 +117,21 @@ function Sequencer(opts){
 
 				// Wrap our loop around/finish it up.
 				if(position >= song.length){
+					console.log(song.length);
 					if(opts.loop){
 						position = 0;
 						loop++;
+						if(opts.onComplete){
+							opts.onComplete();
+						}
+						continue;
 					} else {
-						_this.stop();
+						_this.stop(true);
+						if(opts.onComplete){
+							opts.onComplete();
+						}
+						break;
 					}
-					if(opts.onComplete){
-						opts.onComplete();
-					}
-					continue;
 				}
 
 				// The point at which this set of sounds is to be played.
@@ -107,7 +140,7 @@ function Sequencer(opts){
 
 				// If the buffer is more than 1.4 seconds, stop populating it.
 				if(playAt > ctx.currentTime + _this.buffer){
-					console.log('Buffer full');
+					//console.log('Buffer full');
 					break;
 				}
 
@@ -121,12 +154,19 @@ function Sequencer(opts){
 		return _this;
 	};
 
-	this.stop = function(){
+	this.stop = function(letPlayToEnd){
 		var _this = this;
 		if(_this.interval){
 			clearInterval(_this.interval);
 			_this.interval = false;
 		}
+
+		if ( !letPlayToEnd ) {
+			_this.currentSources.forEach(function(source) {
+				source.stop();
+			});
+		}
+		_this.currentSources = [];
 		position = 0;
 		startTime = ctx.currentTime;
 		return _this;

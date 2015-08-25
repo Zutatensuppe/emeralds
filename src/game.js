@@ -54,10 +54,68 @@
 		this.h = h;
 	}
 	Gfx.prototype = {
-		render: function(screen, x, y) {
-			this.sprite.render(screen, this.x, this.y, this.w, this.h, x, y, TILE_SIZE, TILE_SIZE);
+		render: function(screen, destX, destY, shiftX, shiftY) {
+
+			shiftX = shiftX || 0;
+			shiftY = shiftY || 0;
+
+			if ( shiftX || shiftY ) {
+				// wrap the sprite image
+
+				var ratioX = TILE_SIZE / this.w;
+				var ratioY = TILE_SIZE / this.h;
+
+				var w1, w2, h1, h2;
+				if ( shiftX ) {
+					w2 = Math.abs(shiftX);
+					w1 = this.w - w2;
+				} else {
+					w2 = this.w;
+					w1 = this.w;
+				}
+				if ( shiftY ) {
+					h2 = Math.abs(shiftY);
+					h1 = this.h - h2;
+				} else {
+					h2 = this.h;
+					h1 = this.h;
+				}
+
+				// render part 1
+				this.sprite.render(
+					screen,
+					this.x + shiftX,
+					this.y + shiftY,
+					w1,
+					h1,
+					destX,
+					destY,
+					w1*ratioX,
+					h1*ratioY
+				);
+
+				// render part 2
+				this.sprite.render(
+					screen,
+					this.x,
+					this.y,
+					w2,
+					h2,
+					shiftX ? (destX + w1 * ratioX ) : destX,
+					shiftY ? (destY + h1 * ratioY ) : destY,
+					w2*ratioX,
+					h2*ratioY
+				);
+
+			} else {
+
+				this.sprite.render(screen, this.x, this.y, this.w, this.h, destX, destY, TILE_SIZE, TILE_SIZE);
+
+			}
+
 		}
 	};
+
 	function Font( sprite ) {
 		this.letters = ''+
 			'abcdefg'+
@@ -103,6 +161,8 @@
 			}
 		}
 	};
+
+
 
 
 
@@ -319,6 +379,9 @@
 		this.substep = 0;
 		this.isWalkable = false;
 		this.isPushable = false;
+		this.isDeadly = false;
+		this.isFalling = false;
+		this.wasFalling = false;
 	}
 	Entity.prototype = {
 		constructor: Entity.prototype.constructor,
@@ -351,7 +414,8 @@
 		this.gfx = new Gfx(g.sprite, 16, 16, 16, 16);
 		this.gfxRight = [new Gfx(g.sprite, 32, 16, 16, 16), new Gfx(g.sprite, 16, 32, 16, 16)];
 		this.gfxLeft = [new Gfx(g.sprite, 0, 32, 16, 16), new Gfx(g.sprite, 0, 48, 16, 16)];
-		this.gfxUpDown = [new Gfx(g.sprite, 16, 48, 16, 16), new Gfx(g.sprite, 16, 64, 16, 16)];
+		this.gfxDown = [new Gfx(g.sprite, 16, 48, 16, 16), new Gfx(g.sprite, 16, 64, 16, 16)];
+		this.gfxUp = [new Gfx(g.sprite, 0, 80, 16, 16), new Gfx(g.sprite, 16, 80, 16, 16)];
 
 	}
 	Player.prototype = Object.create(Entity.prototype);
@@ -367,8 +431,10 @@
 				this.gfxLeft[frame].render(context, screenX, screenY);
 			} else if ( this.dirX > 0 ) {
 				this.gfxRight[frame].render(context, screenX, screenY);
-			} else if ( this.dirY != 0 ) {
-				this.gfxUpDown[frame].render(context, screenX, screenY);
+			} else if ( this.dirY > 0 ) {
+				this.gfxDown[frame].render(context, screenX, screenY);
+			} else if ( this.dirY < 0 ) {
+				this.gfxUp[frame].render(context, screenX, screenY);
 			} else {
 				this.gfx.render(context, screenX, screenY);
 			}
@@ -391,8 +457,6 @@
 		this.speed = OBJECT_SPEED;
 		this.stepsPerTile = TILE_SIZE/this.speed;
 		this.substep = 0; // max TILE_SIZE/this.speed
-		this.isFalling = false;
-		this.wasFalling = false;
 		this.isWalkable = false;
 		this.isPushable = true;
 	}
@@ -406,8 +470,6 @@
 		this.speed = OBJECT_SPEED;
 		this.stepsPerTile = TILE_SIZE/this.speed;
 		this.substep = 0; // max TILE_SIZE/this.speed
-		this.isFalling = false;
-		this.wasFalling = false;
 		this.isWalkable = false;
 		this.isPushable = true;
 	}
@@ -493,9 +555,28 @@
 		Entity.prototype.constructor.call(this, g, new Gfx(g.sprite, 48, 0, 16, 16), x, y, TILE_SIZE, TILE_SIZE);
 		this.isWalkable = true;
 		this.ticktick = 10;
+		this.isDeadly = true;
 	}
 	Explosion.prototype = Object.create(Entity.prototype);
 	Explosion.prototype.constructor = Explosion;
+
+	/* Lava
+	===============================================================*/
+	function Lava(g, x, y) {
+		Entity.prototype.constructor.call(this, g, new Gfx(g.sprite, 48, 64, 16, 16), x, y, TILE_SIZE, TILE_SIZE);
+		this.isWalkable = true;
+		this.isDeadly = true;
+	}
+	Lava.prototype = Object.create(Entity.prototype);
+	Lava.prototype.constructor = Lava;
+	Lava.prototype.render = function(context) {
+		var shift = 0;
+		if ( this.game.state === 'game' ) {
+			var t = this.game.ticks % 256;
+			shift = Math.floor(t / 32);
+		}
+		this.gfx.render(context, this.x - this.game.renderStartX, this.y - this.game.renderStartY, shift);
+	};
 
 	/* Dummy
 	 ===============================================================*/
@@ -535,6 +616,21 @@
 	};
 
 
+	/* Door
+	 ===================================================================*/
+	function Message(g, text, ticktick) {
+		this.game = g;
+		this.text = text;
+		this.ticktick = ticktick;
+	}
+	Message.prototype.render = function(context, msgIndex) {
+		this.game.font.renderText(
+			context,
+			this.text,
+			VISIBLE_WIDTH*TILE_SIZE/2 - this.text.length*FONT_SIZE/2,
+			FONT_SIZE/2+(msgIndex*FONT_SIZE*1.5)
+		);
+	};
 
 
 	/////////////////////////////////////////////////////////////////
@@ -555,13 +651,17 @@
 		this.font = null;
 		this.ticks = 0;
 
+		this.startTime = 0;
 		this.renderStartX = 0;
 		this.renderStartY = 0;
 
 		//self.canvas.width  = 1024; //window.innerWidth;
 		//self.canvas.height = 768; //window.innerHeight;
 
+		this.messages = [];
+
 		this.isReversed = false;
+
 		this.isMuted = false;
 
 		this.inputHandler = new InputHandler();
@@ -679,6 +779,88 @@
 			]
 		);
 
+		this.audioHandler.add('death', 1,
+			[
+				//[3,0.0137,0.1196,0.0357,0.7666,0.5988,,-0.541,-0.0004,,,-0.7069,,-0.5796,-0.0053,0.8313,-0.1972,-0.7011,0.9901,0.3907,-0.1717,,0.5852,0.5]
+				//[3,0.1405,0.01,0.3854,0.9984,0.0726,,,0.005,,0.1376,0.7791,0.8835,0.8931,-0.0015,0.383,-0.1131,-0.3126,0.4644,0.6286,0.1435,,0.1538,0.5]
+				[3,,0.1943,0.6007,0.4404,0.5443,,-0.347,,,,,,,,0.3375,,,1,,,,,0.5]
+			]
+		);
+
+		//this.audioHandler.addSequence( 'deathsong', new Sequencer({
+		//	loopSpeed: 400,
+		//	instruments: {
+		//		c: jsfxr([1,,0.1417,,0.3735,0.1865,,,,,,,,,,,,,0.9934,0.2529,,0.1,,0.5]),
+		//		d: jsfxr([1,,0.1417,,0.3735,0.1935,,,,,,,,,,,,,0.9934,0.2529,,0.1,,0.5]),
+		//		e: jsfxr([1,,0.1417,,0.4065,0.2065,,,,,,,,,,,,,0.9934,0.2529,,0.1,,0.5]),
+		//		f: jsfxr([1,,0.1417,,0.4065,0.2165,,,,,,,,,,,,,0.9934,0.2529,,0.1,,0.5]),
+		//		g: jsfxr([1,,0.1417,,0.4065,0.2265,,,,,,,,,,,,,0.9934,0.2529,,0.1,,0.5]),
+		//		a: jsfxr([1,,0.1417,,0.4065,0.2365,,,,,,,,,,,,,0.9934,0.2529,,0.1,,0.5]),
+		//		h: jsfxr([1,,0.1417,,0.4065,0.2465,,,,,,,,,,,,,0.9934,0.2529,,0.1,,0.5]),
+		//		c2: jsfxr([1,,0.1417,,0.4065,0.2565,,,,,,,,,,,,,0.9934,0.2529,,0.1,,0.5]),
+		//		cymbal: this.audioHandler.instruments.cymbal,
+		//		//drum: jsfxr([1,,0.1787,,0.3095,0.17,,,,,,,,0.9934,0.2529,,0.1,,0.5]),
+		//		//drum: jsfxr([1,,0.1417,,0.4065,0.2565,,,,,,,,,,,,,0.9934,0.2529,,0.1,,0.5]),
+		//		bass: this.audioHandler.instruments.bass,
+		//		drum: this.audioHandler.instruments.drum,
+		//		wave: this.audioHandler.instruments.wave
+		//	},
+		//	loops: {
+		//		bestloop: [
+		//			['c'],
+		//			['d'],
+		//			['g'],
+		//			['f'],
+		//			['e'],
+		//			['a'],
+		//			[''],
+		//			['g']
+		//		],
+		//		otherloop: [
+		//			['drum'],
+		//			[],
+		//			[],
+		//			[]
+		//		]
+		//	},
+		//	song: [
+		//		['bestloop', 'otherloop'],
+		//		[],
+		//		[],
+		//		[],
+		//		['otherloop'],
+		//		[],
+		//		['wave'],
+		//		[],
+		//		['bestloop', 'otherloop'],
+		//		[],
+		//		[],
+		//		[],
+		//		['otherloop'],
+		//		[],
+		//		['wave'],
+		//		[],
+		//		['bestloop', 'otherloop'],
+		//		[],
+		//		['wave'],
+		//		[],
+		//		['otherloop'],
+		//		[],
+		//		['h', 'wave'],
+		//		[],
+		//		['bestloop', 'otherloop'],
+		//		[],
+		//		['wave'],
+		//		[],
+		//		['otherloop'],
+		//		[],
+		//		[],
+		//		[],
+		//	],
+		//	loop: true
+		//}));
+		//this.audioHandler.playSequence('deathsong');
+
 
 		this.elements = [];
 		this.rElements = [];
@@ -686,11 +868,11 @@
 		this.gemCount = 0;
 
 		var map = [
-			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
+			'g','s','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
 			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
 			'g','g','e','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
-			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
-			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
+			'g','r','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
+			'g','r','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
 			'g','g','d','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
 			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
 			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
@@ -711,7 +893,7 @@
 			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g',
 			'g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g','g'
 		];
-		map = false;
+		//map = false;
 
 		if ( map ) {
 			for ( var i = 0; i < map.length; i++ ) {
@@ -727,6 +909,9 @@
 				switch ( map[i] ) {
 					case 'g':
 						this.setElementAtIndex(i, new Grass(this, x, y));
+						break;
+					case 'l':
+						this.setElementAtIndex(i, new Lava(this, x, y));
 						break;
 					case 'b':
 						this.setElementAtIndex(i, new Bomb(this, x, y));
@@ -783,10 +968,12 @@
 						this.setElementAtIndex(index, new Stone(this, x, y));
 						//this.elements.push(new Stone(this, i*TILE_SIZE, j*TILE_SIZE));
 						//this.rElements.push(new Emerald(this, i*TILE_SIZE, j*TILE_SIZE));
-					} else {
+					} else if ( rnd > 0.35 ) {
 						this.setElementAtIndex(index, new Grass(this, x, y));
 						//this.elements.push(new Grass(this, i*TILE_SIZE, j*TILE_SIZE));
 						//this.rElements.push(null);
+					} else {
+						this.setElementAtIndex(index, new Lava(this, x, y));
 					}
 					index++;
 				}
@@ -838,9 +1025,11 @@
 			var posY = parseInt(idx/MAP_SIZE_X, 10) * TILE_SIZE;
 
 			if ( el === null ) {
+				rel = null;
+			} else if ( el instanceof Lava ) {
 				rel = new Grass(this, posX, posY);
 			} else if ( el instanceof Grass ) {
-				rel = null;
+				rel = new Lava(this, posX, posY);
 			} else if ( el instanceof Bomb ) {
 				rel = new Ruby(this, posX, posY);
 			} else if ( el instanceof Stone ) {
@@ -921,6 +1110,7 @@
 				}
 			});
 			if ( openedAnyDoor ) {
+				self.messages.push(new Message(self, "Door was opened!!", 150));
 				self.audioHandler.play('opendoor');
 			}
 
@@ -1057,6 +1247,23 @@
 			}
 
 
+
+			// first move the player
+			var playerHasMoved = false;
+
+			// check if at the position is something and that something is not already moving
+			if ( self.player.dirX !== 0 || self.player.dirY !== 0 ) {
+				self.player.move();
+				playerHasMoved = true;
+
+				// player moves each field in 8 steps
+				self.player.substep = self.player.substep < self.player.stepsPerTile-1 ? self.player.substep+1 : 0;
+			}
+
+
+
+			// then move the elements
+
 			var elementsToUpdate = self.isReversed ? self.rElements : self.elements;
 			elementsToUpdate.forEach(function(item, idx) {
 				if ( item === null ) {
@@ -1141,9 +1348,20 @@
 				if ( item.dirX === 0 && item.dirY === 0 ) {
 					return;
 				}
+
 				item.move();
 				item.substep = item.substep < item.stepsPerTile-1 ? item.substep+1 : 0;
 
+
+
+				// when the thing is falling and collided with the player, let the player die!
+				if ( item.isFalling && item.x <= self.player.x && self.overlaps(item, self.player) ) {
+					self.state = 'gameover';
+					self.audioHandler.stopSequence('backgroundmusic');
+					self.audioHandler.play('death');
+					//self.audioHandler.playSequence('deathsong');
+					return;
+				}
 
 				if ( item.substep > 0 ) {
 					return;
@@ -1164,19 +1382,6 @@
 				self.setElementAtIndex(pos.y*MAP_SIZE_X+pos.x, item);
 
 			});
-
-
-
-			var playerHasMoved = false;
-
-			// check if at the position is something and that something is not already moving
-			if ( self.player.dirX !== 0 || self.player.dirY !== 0 ) {
-				self.player.move();
-				playerHasMoved = true;
-
-				// player moves each field in 8 steps
-				self.player.substep = self.player.substep < self.player.stepsPerTile-1 ? self.player.substep+1 : 0;
-			}
 
 			var unmove = false;
 			if ( self.player.substep === 1 ) {
@@ -1242,7 +1447,7 @@
 			}
 
 
-			if ( playerHasMoved ) {
+			if ( playerHasMoved && self.player.substep === 0 ) {
 				self.audioHandler.play('walk');
 			}
 
@@ -1251,7 +1456,15 @@
 
 			var elIndex = playerPosAfter.y*MAP_SIZE_X+playerPosAfter.x;
 			var elAtPlayer= self.getElementAtPos(playerPosAfter.x, playerPosAfter.y);
-			if ( elAtPlayer instanceof Grass ) {
+			if ( elAtPlayer === null ) {
+			} else if ( elAtPlayer.isDeadly ) {
+
+				// die!!!! :3
+				self.state = 'gameover';
+				self.audioHandler.stopSequence('backgroundmusic');
+				self.audioHandler.play('death');
+
+			} else if ( elAtPlayer instanceof Grass ) {
 
 				self.deleteElementAtIndex(elIndex);
 				//console.log('ate some grass');
@@ -1270,6 +1483,17 @@
 			}
 
 
+		},
+
+		overlaps: function( item1, item2, threshold ) {
+			// check if overlap with a threshold
+			threshold = threshold || TILE_SIZE/8; //default threshold quarter of a tile (/8 because it counts twice)
+			return (
+				item1.x+threshold < item2.x+item2.w-threshold
+				&& item1.x+item1.w-threshold > item2.x+threshold
+				&& item1.y+threshold < item2.y+item2.h-threshold
+				&& item1.y+item1.h-threshold > item2.y+threshold
+			);
 		},
 
 		drawElements: function() {
@@ -1325,21 +1549,39 @@
 			hudLeftElement.render(self.context, 0, (VISIBLE_HEIGHT)*TILE_SIZE);
 			hudRightElement.render(self.context, (VISIBLE_WIDTH-1)*TILE_SIZE, (VISIBLE_HEIGHT)*TILE_SIZE);
 
-			if ( self.state === 'won' ) {
-				self.font.renderText(
-					self.context,
-					'A winner is you!',
-					FONT_SIZE/2,
-					(VISIBLE_HEIGHT)*TILE_SIZE + (TILE_SIZE/2 - FONT_SIZE/2)
-				);
+			var timeNow = new Date().getTime();
+			var timeElapsed = Math.round((timeNow - self.startTime)/1000);
+			var m = timeElapsed/60 | 0;
+			var s = timeElapsed%60;
+			var statusText = '';
+			if ( self.state === 'gameover' ) {
+				statusText = 'Game over...';
+			} else if ( self.state === 'won' ) {
+				statusText = 'A winner is you!';
 			} else {
-				self.font.renderText(
-					self.context,
-					"Gems: "+ self.player.gemCount + '/' + self.gemTarget,
-					FONT_SIZE/2,
-					(VISIBLE_HEIGHT)*TILE_SIZE + (TILE_SIZE/2 - FONT_SIZE/2)
-				);
+				statusText = 'Gems: '+ self.player.gemCount + '/' + self.gemTarget;
 			}
+			self.font.renderText(
+				self.context,
+				statusText,
+				FONT_SIZE/2,
+				(VISIBLE_HEIGHT)*TILE_SIZE + (TILE_SIZE/2 - FONT_SIZE/2)
+			);
+			var timeText = m+':'+(s > 9 ? s : '0'+s);
+			self.font.renderText(
+				self.context,
+				timeText,
+				(VISIBLE_WIDTH*TILE_SIZE - timeText.length * FONT_SIZE - FONT_SIZE/2),
+				(VISIBLE_HEIGHT)*TILE_SIZE + (TILE_SIZE/2 - FONT_SIZE/2)
+			);
+
+			var msgOffset = 0;
+			self.messages.forEach(function(msg, idx, arr) {
+				if ( --msg.ticktick === 0 ) {
+					arr.splice(idx,1);
+				}
+				msg.render(self.context, msgOffset++);
+			});
 		},
 		render: function() {
 			var self = this;
@@ -1351,6 +1593,9 @@
 			self.player.render(self.context);
 		},
 		init: function() {
+			this.startTime = new Date().getTime();
+			this.messages.push(new Message(this, 'Welcome..', 300));
+			this.messages.push(new Message(this, '...to the jungle..', 300));
 		},
 		start: function() {
 		},
