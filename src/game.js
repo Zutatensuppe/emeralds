@@ -22,15 +22,24 @@
 	var SPRITE_TILE_SIZE = 16;
 	var SPRITE_FONT_SIZE = 8;
 
-	// some keys:
-	const VK_LEFT = 37;
-	const VK_RIGHT = 39;
-	const VK_UP = 38;
-	const VK_DOWN = 40;
+	// some key codes:
 	const VK_SPACE = 32;
-	const VK_R = 82;
-	const VK_M = 77;
+	const VK_LEFT = 37;
+	const VK_UP = 38;
+	const VK_RIGHT = 39;
+	const VK_DOWN = 40;
 	const VK_E = 69;
+	const VK_M = 77;
+	const VK_O = 79;
+	const VK_P = 80;
+	const VK_R = 82;
+	const VK_S = 83;
+	const VK_L = 76;
+	const VK_T = 84;
+	const VK_X = 88;
+	const VK_RETURN = 13;
+	const VK_ESCAPE = 27;
+	const VK_BACKSPACE = 8;
 
 	var INSTRUMENT_CYMBAL = 1;
 	var INSTRUMENT_DRUM = 2;
@@ -61,7 +70,7 @@
 	var ELEMENT_RUBY = 4;
 	var ELEMENT_LAVA = 5;
 	var ELEMENT_DOOR = 6;
-	var ELEMENT_NULL = 7;
+	var ELEMENT_WALL = 7;
 
 	var UNDEF = 'undefined';
 	var PROTO = 'prototype';
@@ -179,7 +188,8 @@
 			'opqrstu'+
 			'vwxyz?!'+
 			':,.1234'+
-			'567890/';
+			'567890/'+
+			'+"';
 		this.sprite = sprite;
 	}
 	Font[PROTO] = {
@@ -197,7 +207,8 @@
 			}
 			return false;
 		},
-		renderText: function(screen, text, x, y) {
+		renderText: function(screen, text, x, y, FS) {
+			FS = FS || FONT_SIZE;
 			text = text.toLowerCase();
 			var _x = x;
 			for ( var i = 0, iLen = text.length; i < iLen; i++ ) {
@@ -209,9 +220,9 @@
 				}
 				var posInSprite = this.posInSprite(chr);
 				if ( posInSprite ) {
-					this.sprite.render(screen, posInSprite.x, posInSprite.y, SPRITE_FONT_SIZE, SPRITE_FONT_SIZE, _x, y, FONT_SIZE, FONT_SIZE);
+					this.sprite.render(screen, posInSprite.x, posInSprite.y, SPRITE_FONT_SIZE, SPRITE_FONT_SIZE, _x, y, FS, FS);
 				}
-				_x+=FONT_SIZE;
+				_x+=FS;
 			}
 		}
 	};
@@ -245,20 +256,28 @@
 			} else {
 				this.isPressed = false;
 			}
+		},
+		reset: function() {
+			this.isPressed = false;
+			this.isDown = false;
+			this.presses = 0;
+			this.absorbs = 0;
 		}
 	};
 
 	function InputHandler() {
-
 		this.keys = {};
+
+		// special keys are added here
+		// normal letters and numbers are created on the fly
 		this.keys[VK_LEFT] = new VirtualKey();
 		this.keys[VK_RIGHT] = new VirtualKey();
 		this.keys[VK_UP] = new VirtualKey();
 		this.keys[VK_DOWN] = new VirtualKey();
 		this.keys[VK_SPACE] = new VirtualKey();
-		this.keys[VK_R] = new VirtualKey();
-		this.keys[VK_M] = new VirtualKey();
-		this.keys[VK_E] = new VirtualKey();
+		this.keys[VK_RETURN] = new VirtualKey();
+		this.keys[VK_ESCAPE] = new VirtualKey();
+		this.keys[VK_BACKSPACE] = new VirtualKey();
 
 		var self = this;
 		window.addEventListener('keydown', function(e) {
@@ -270,18 +289,21 @@
 	}
 	InputHandler[PROTO] = {
 		toggle: function(e, pressed) {
+			// 0-9 and a-z
+			if ( !this.keys[e.keyCode] && e.keyCode >= 48 && e.keyCode <= 90 ) {
+				this.keys[e.keyCode] = new VirtualKey();
+			}
 			if ( this.keys[e.keyCode] ) {
 				this.keys[e.keyCode].toggle(pressed);
 				e.preventDefault();
 			}
 		},
 		tick: function() {
-			var self = this;
-			for ( var idx in self.keys ) {
-				if ( ! self.keys.hasOwnProperty(idx) ) {
+			for ( var idx in this.keys ) {
+				if ( ! this.keys.hasOwnProperty(idx) ) {
 					continue;
 				}
-				self.keys[idx].tick();
+				this.keys[idx].tick();
 			}
 		},
 		isDown: function(keyCode) {
@@ -289,6 +311,14 @@
 		},
 		isPressed: function(keyCode) {
 			return this.keys[keyCode] && this.keys[keyCode].isPressed;
+		},
+		reset: function() {
+			for ( var idx in this.keys ) {
+				if ( ! this.keys.hasOwnProperty(idx) ) {
+					continue;
+				}
+				this.keys[idx].reset();
+			}
 		}
 	};
 
@@ -532,6 +562,16 @@
 	Grass[PROTO][CONSTRUCTOR] = Grass;
 
 
+	/* Wall
+	 ===============================================================*/
+	function Wall(g, x, y){
+		Entity[PROTO][CONSTRUCTOR].call(this, g, g.elementGraphics[ELEMENT_WALL], x, y, TILE_SIZE, TILE_SIZE);
+		this.isWalkable = false;
+	}
+	Wall[PROTO] = Object.create(Entity[PROTO]);
+	Wall[PROTO][CONSTRUCTOR] = Wall;
+
+
 	/* Gem
 	 ===============================================================*/
 	function Gem(g, gfx, x, y, w, h) {
@@ -711,9 +751,14 @@
 
 		this.inputHandler = new InputHandler();
 		this.audioHandler = new AudioHandler();
+		this.prevState = null;
 		this.state = Game.STATE_INIT;
 
 
+		this.editAwaitingGemTarget = false;
+		this.editCurrentMapName = '';
+		this.loadMapError = false;
+		this.saveMapError = false;
 		this.editCurrentElement = ELEMENT_GRASS;
 		this.allEditElements = [
 			ELEMENT_GRASS,
@@ -723,13 +768,13 @@
 			ELEMENT_RUBY,
 			ELEMENT_LAVA,
 			ELEMENT_DOOR,
-			ELEMENT_NULL
+			ELEMENT_WALL,
 		];
 
 		this.elementGraphics = [];
 
 		this.sprite = new Sprite('sprites.png', function() {
-			self.state = Game.STATE_MENU;
+			self.changeState(Game.STATE_MENU);
 			self.font = new Font(self.sprite);
 
 			self.elementGraphics = {};
@@ -740,6 +785,7 @@
 			self.elementGraphics[ELEMENT_RUBY] = new Gfx(self.sprite, 0, 64, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE);
 			self.elementGraphics[ELEMENT_LAVA] = new Gfx(self.sprite, 48, 64, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE);
 			self.elementGraphics[ELEMENT_DOOR] = new Gfx(self.sprite, 32, 32, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE);
+			self.elementGraphics[ELEMENT_WALL] = new Gfx(self.sprite, 32, 80, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE);
 		}); // load sprite
 
 
@@ -939,28 +985,24 @@
 
 			if ( self.state === Game.STATE_INIT ) {
 				// do nothing
-			} else if ( self.state === Game.STATE_MENU ) {
+			} else if ( self.state === Game.STATE_MENU
+				|| self.state === Game.STATE_SAVEMAP
+				|| self.state === Game.STATE_LOADMAP
+				) {
 
 				self.handleInput();
 				self.render();
 
-			} else if ( self.state === Game.STATE_EDIT ) {
+			} if ( self.state === Game.STATE_EDIT
+				|| self.state === Game.STATE_GAME
+				) {
 
 				self.handleInput();
 				self.update();
 				self.render();
 
-			} else if ( self.state === Game.STATE_GAME ) {
-
+			} else if ( self.state === Game.STATE_GAMEOVER || self.state === Game.STATE_WON ) {
 				self.handleInput();
-				self.update();
-				self.render();
-
-			} else if ( self.state === Game.STATE_WON ) {
-
-				self.handleInput();
-				self.render();
-
 			}
 
 			requestAnimationFrame(tick);
@@ -975,8 +1017,211 @@
 	Game.STATE_WON = 2;
 	Game.STATE_GAMEOVER = 3;
 	Game.STATE_EDIT = 5;
+	Game.STATE_SAVEMAP = 6;
+	Game.STATE_LOADMAP = 7;
 
 	Game[PROTO] = {
+		changeState: function( toState ) {
+			this.prevState = this.state;
+			this.state = toState;
+
+			// reset input handler to stop taking key presses/downs to another state
+			this.inputHandler.reset();
+		},
+		randomMap: function() {
+
+			//todo: should just fill an array with letters and then use readMap on the array
+			// then set the gem target to 0.75 of gem count afterwards
+
+			this.elements = [];
+			this.rElements = [];
+			this.gemCount = 0;
+
+			for ( var i = 0; i < MAP_SIZE_Y*MAP_SIZE_X; i++ ) {
+				this.elements.push(null);
+				this.rElements.push(null);
+			}
+
+			var index = 0;
+			var x, y;
+			for ( var j = 0; j < MAP_SIZE_Y; j++ ) {
+				for ( var i = 0; i < MAP_SIZE_X; i++ ) {
+
+					var rnd = Rnd();
+					x = i*TILE_SIZE;
+					y = j*TILE_SIZE;
+
+
+					// grass at player pos
+					if ( i+j === 0 ) {
+						this.setElementAtIndex(index, new Grass(this, x, y));
+					} else {
+						if ( rnd > 0.99 ) {
+							this.setElementAtIndex(index, new Ruby(this, x, y));
+							//this.rElements.push(new Bomb(this, i*TILE_SIZE, j*TILE_SIZE));
+						} else if ( rnd > 0.97 ) {
+							this.setElementAtIndex(index, null);
+							//this.rElements.push(new Grass(this, i*TILE_SIZE, j*TILE_SIZE));
+							//this.elements.push(null);
+						} else if ( rnd > 0.9 ) {
+							this.setElementAtIndex(index, new Bomb(this, x, y));
+							//this.elements.push(new Bomb(this, i*TILE_SIZE, j*TILE_SIZE));
+							//this.rElements.push(new Ruby(this, i*TILE_SIZE, j*TILE_SIZE));
+						} else if ( rnd > 0.8 ) {
+							this.setElementAtIndex(index, new Emerald(this, x, y));
+							//this.elements.push(new Emerald(this, i*TILE_SIZE, j*TILE_SIZE));
+							//this.rElements.push(new Stone(this, i*TILE_SIZE, j*TILE_SIZE));
+						} else if ( rnd > 0.7 ) {
+							this.setElementAtIndex(index, new Stone(this, x, y));
+							//this.elements.push(new Stone(this, i*TILE_SIZE, j*TILE_SIZE));
+							//this.rElements.push(new Emerald(this, i*TILE_SIZE, j*TILE_SIZE));
+						} else if ( rnd > 0.35 ) {
+							this.setElementAtIndex(index, new Grass(this, x, y));
+							//this.elements.push(new Grass(this, i*TILE_SIZE, j*TILE_SIZE));
+							//this.rElements.push(null);
+						} else {
+							this.setElementAtIndex(index, new Lava(this, x, y));
+						}
+					}
+					index++;
+				}
+			}
+			// generate a door at a random position
+			var randX = Rnd()*MAP_SIZE_X | 0;
+			var randY = Rnd()*MAP_SIZE_Y | 0;
+			this.setElementAtIndex(randY*MAP_SIZE_X+randX, new Door(this, randX*TILE_SIZE, randY*TILE_SIZE));
+			//console.log('door at : '+randX+'/'+randY);
+
+			this.gemTarget = (this.gemCount * 0.75) | 0;
+			this.player = new Player(this, 0, 0);
+
+		},
+		readMap: function(obj) {
+
+			var map = obj.map;
+			var playerX = obj.playerX;
+			var playerY = obj.playerY;
+			var gemTarget = obj.gemTarget;
+
+			var G = 'g';
+			var S = 's';
+			var R = 'r';
+			var L = 'l';
+			var E = 'e';
+			var D = 'd';
+			var B = 'b';
+			var W = 'W';
+			var X = 'X';
+
+			this.elements = [];
+			this.rElements = [];
+			this.gemCount = 0;
+
+			for ( var i = 0; i < map.length; i++ ) {
+				this.elements.push(null);
+				this.rElements.push(null);
+			}
+			var x, y;
+			for ( var i = 0; i < map.length; i++ ) {
+				x = (i%MAP_SIZE_X) * TILE_SIZE;
+				y = parseInt(i/MAP_SIZE_X, 10) * TILE_SIZE;
+				switch ( map[i] ) {
+					case G:
+						this.setElementAtIndex(i, new Grass(this, x, y));
+						break;
+					case L:
+						this.setElementAtIndex(i, new Lava(this, x, y));
+						break;
+					case B:
+						this.setElementAtIndex(i, new Bomb(this, x, y));
+						break;
+					case S:
+						this.setElementAtIndex(i, new Stone(this, x, y));
+						break;
+					case E:
+						this.setElementAtIndex(i, new Emerald(this, x, y));
+						break;
+					case R:
+						this.setElementAtIndex(i, new Ruby(this, x, y));
+						break;
+					case D:
+						this.setElementAtIndex(i, new Door(this, x, y));
+						break;
+					case W:
+						this.setElementAtIndex(i, new Wall(this, x, y));
+						break;
+					default: break;
+				}
+			}
+			this.gemTarget = gemTarget || this.gemCount;
+			this.player = new Player(this, playerX*TILE_SIZE, playerY*TILE_SIZE);
+		},
+		loadMap: function(mapName) {
+			//TODO: check if localStorage can be used.
+			var obj = localStorage.getItem('map-'+mapName.toLowerCase());
+			if ( !obj ) {
+				return false;
+			}
+			try {
+				obj = JSON.parse(obj);
+			} catch( e ) {
+				return false;
+			}
+
+			if ( !obj ) {
+				return false;
+			}
+			return obj;
+
+		},
+		saveMap: function( mapName ) {
+
+			var G = 'g';
+			var S = 's';
+			var R = 'r';
+			var L = 'l';
+			var E = 'e';
+			var D = 'd';
+			var B = 'b';
+			var X = 'X';
+			var W = 'W';
+
+			var map = [];
+			this.elements.forEach(function( el ) {
+				if ( el === null ) {
+					map.push(X);
+				} else if ( el instanceof Lava ) {
+					map.push(L);
+				} else if ( el instanceof Grass ) {
+					map.push(G);
+				} else if ( el instanceof Bomb ) {
+					map.push(B);
+				} else if ( el instanceof Stone ) {
+					map.push(S);
+				} else if ( el instanceof Ruby ) {
+					map.push(R)
+				} else if ( el instanceof Emerald ) {
+					map.push(E);
+				} else if ( el instanceof Explosion ) {
+					// dont save to map
+				} else if ( el instanceof Door ) {
+					map.push(D);
+				} else if ( el instanceof Wall ) {
+					map.push(W);
+				}
+			});
+			var self = this;
+			var pos = self.player.getActualPosition();
+			var obj = {
+				map: map,
+				gemTarget: self.gemTarget,
+				playerX: pos.x,
+				playerY: pos.y
+			};
+			//TODO: check if localStorage can be used.
+			localStorage.setItem('map-'+mapName.toLowerCase(), JSON.stringify(obj));
+			return true;
+		},
 		setElementAtIndex: function(idx, el) {
 
 			if ( this.elements.length <= idx || idx < 0 ) {
@@ -1005,6 +1250,8 @@
 				rel = new Explosion(this, posX, posY); // explosion are explosion
 			} else if ( el instanceof Door ) {
 				rel = new Door(this, posX, posY); // door are door
+			} else if ( el instanceof Wall ) {
+				rel = new Wall(this, posX, posY); // door are door
 			}
 
 			if ( this.isReversed ) {
@@ -1057,6 +1304,21 @@
 			}
 		},
 
+		calcGemTarget: function( ) {
+			var gemTarget = 0;
+			this.elements.forEach(function(item) {
+				if ( item instanceof Gem ) {
+					gemTarget += item.value;
+				}
+			});
+			this.rElements.forEach(function(item) {
+				if ( item instanceof Gem ) {
+					gemTarget += item.value;
+				}
+			});
+			return gemTarget;
+		},
+
 		openDoors: function() {
 			var self = this;
 			var openedAnyDoor = false;
@@ -1089,6 +1351,7 @@
 				case ELEMENT_RUBY: ret = new Ruby(this, x, y); break;
 				case ELEMENT_LAVA: ret = new Lava(this, x, y); break;
 				case ELEMENT_DOOR: ret = new Door(this, x, y); break;
+				case ELEMENT_WALL: ret = new Wall(this, x, y); break;
 			}
 			return ret;
 		},
@@ -1132,9 +1395,129 @@
 
 				} else if ( self.inputHandler.isPressed(VK_SPACE) ) {
 					self.start();
+				} else if ( self.inputHandler.isPressed(VK_L) ) {
+					// save map
+					self.changeState(Game.STATE_LOADMAP);
+					self.editCurrentMapName = '';
 				}
 
+			} else if ( self.state === Game.STATE_LOADMAP ) {
+
+				// get all the input until enter is pressed . this will be the name of the map.
+				// or if escape is pressed, cancel savemap state and go back to edit mode
+
+				if ( self.inputHandler.isPressed(VK_RETURN) ) {
+					if ( self.editCurrentMapName.length > 0 ) {
+						var map = self.loadMap(self.editCurrentMapName);
+						if ( map ) {
+							if ( self.prevState === Game.STATE_EDIT ) {
+								self.startEdit(map);
+							} else {
+								self.start(map);
+							}
+						}
+					}
+				}
+
+				for ( var i = 48; i <= 90; i++ ) {
+					if ( self.inputHandler.isPressed(i) ) {
+						self.editCurrentMapName+=String.fromCharCode(i);
+					}
+				}
+				if ( self.inputHandler.isPressed(VK_BACKSPACE) ) {
+					if ( self.editCurrentMapName.length > 0 ) {
+						self.editCurrentMapName = self.editCurrentMapName.substring(0, self.editCurrentMapName.length-1);
+					}
+					if ( !self.editCurrentMapName ) {
+						self.editCurrentMapName = '';
+					}
+				}
+
+				if ( self.inputHandler.isPressed(VK_ESCAPE) ) {
+					// go back to edit mode or go back to menu
+					if ( self.prevState === Game.STATE_EDIT ) {
+						self.changeState(Game.STATE_EDIT);
+					} else {
+						self.changeState(Game.STATE_MENU);
+					}
+				}
+
+
+			} else if ( self.state === Game.STATE_SAVEMAP ) {
+
+				// get all the input until enter is pressed . this will be the name of the map.
+				// or if escape is pressed, cancel savemap state and go back to edit mode
+
+				if ( self.inputHandler.isPressed(VK_RETURN) ) {
+					if ( self.editCurrentMapName.length > 0 ) {
+						if ( self.saveMap(self.editCurrentMapName) ) {
+							// saved..
+							// just go to edit mode
+							self.changeState(Game.STATE_EDIT);
+							self.messages.push(new Message(self, 'Saved as "'+self.editCurrentMapName+'"...', 150));
+						} else {
+							self.saveMapError = 'Unable to save map.';
+						}
+					}
+				}
+
+				for ( var i = 48; i <= 90; i++ ) {
+					if ( self.inputHandler.isPressed(i) ) {
+						self.editCurrentMapName+=String.fromCharCode(i);
+						self.saveMapError = false;
+					}
+				}
+				if ( self.inputHandler.isPressed(VK_BACKSPACE) ) {
+					if ( self.editCurrentMapName.length > 0 ) {
+						self.editCurrentMapName = self.editCurrentMapName.substring(0, self.editCurrentMapName.length-1);
+					}
+					if ( self.editCurrentMapName.length === 0 ) {
+						self.saveMapError = 'Please enter a name';
+					}
+				}
+
+				if ( self.inputHandler.isPressed(VK_ESCAPE) ) {
+					// just go to edit mode
+					self.changeState(Game.STATE_EDIT);
+				}
+
+
 			} else if ( self.state === Game.STATE_EDIT ) {
+
+
+				if ( self.inputHandler.isPressed(VK_O) ) {
+					/// fill the whole map with the current element type
+
+					this.elements = [];
+					this.rElements = [];
+					for ( var i = 0; i < MAP_SIZE_Y*MAP_SIZE_X; i++ ) {
+						this.elements.push(null);
+						this.rElements.push(null);
+					}
+
+					var index = 0;
+					var x, y;
+					for ( var j = 0; j < MAP_SIZE_Y; j++ ) {
+						for ( var i = 0; i < MAP_SIZE_X; i++ ) {
+							x = i*TILE_SIZE;
+							y = j*TILE_SIZE;
+							self.setElementAtIndex(index, self.createElement(self.editCurrentElement, x, y));
+							index++;
+						}
+					}
+
+				}
+
+				if ( self.inputHandler.isPressed(VK_P) ) {
+					/// fill the whole map with the current element type
+
+					this.elements = [];
+					this.rElements = [];
+					for ( var i = 0; i < MAP_SIZE_Y*MAP_SIZE_X; i++ ) {
+						this.elements.push(null);
+						this.rElements.push(null);
+					}
+				}
 
 				if ( self.inputHandler.isPressed(VK_SPACE) ) {
 					self.editCurrentElement = self.editCurrentElement === self.allEditElements.length-1
@@ -1142,10 +1525,51 @@
 						: self.editCurrentElement+1;
 				}
 
+				if ( self.inputHandler.isPressed(VK_T) ) {
+					console.log('t');
+					if ( self.editAwaitingGemTarget !== false ) {
+						console.log('automatic');
+						self.editAwaitingGemTarget = false;
+						self.gemTarget = self.calcGemTarget();
+					} else {
+						console.log('awaiting!');
+						// awaiting target gem number
+						self.editAwaitingGemTarget = '';
+						self.gemTarget = 0;
+					}
+				}
+				if ( self.editAwaitingGemTarget !== false ) {
+					for ( var i = 48; i < 58; i++ ) {
+						// input numbers
+						if ( self.inputHandler.isPressed(i) ) {
+							self.editAwaitingGemTarget+=''+String.fromCharCode(i);
+							self.gemTarget = Number(self.editAwaitingGemTarget);
+						}
+					}
+					if ( self.inputHandler.isPressed(VK_RETURN) ) {
+						self.editAwaitingGemTarget = false;
+					}
+				}
+
 				if ( self.inputHandler.isDown(VK_E) ) {
 					var pos = self.player.getActualPosition();
-					console.log(pos.x, pos.y);
 					self.setElementAtIndex(pos.y*MAP_SIZE_X+pos.x, self.createElement(self.editCurrentElement, pos.x*TILE_SIZE, pos.y*TILE_SIZE));
+				}
+
+				if ( self.inputHandler.isDown(VK_X) ) {
+					var pos = self.player.getActualPosition();
+					self.setElementAtIndex(pos.y*MAP_SIZE_X+pos.x, null);
+				}
+
+				if ( self.inputHandler.isPressed(VK_L) ) {
+					// load map
+					//self.editCurrentMapName = '';
+					self.changeState(Game.STATE_LOADMAP);
+				}
+				if ( self.inputHandler.isPressed(VK_S) ) {
+					// save map
+					//self.editCurrentMapName = '';
+					self.changeState(Game.STATE_SAVEMAP);
 				}
 
 				if ( self.player.substep === 0 ) {
@@ -1173,6 +1597,12 @@
 					}
 				}
 
+				if ( self.inputHandler.isPressed(VK_ESCAPE) ) {
+					// go to menu for now. later maybe add pause.
+					self.audioHandler.stopSequence(AUDIO_BG_MUSIC);
+					self.changeState(Game.STATE_MENU);
+				}
+
 			} else if ( self.state === Game.STATE_GAME && self.player.substep === 0 ) {
 
 				if ( self.inputHandler.isDown(VK_UP) ) {
@@ -1197,6 +1627,21 @@
 					self.audioHandler.play(AUDIO_REVERSE);
 				}
 
+				if ( self.inputHandler.isPressed(VK_ESCAPE) ) {
+					// go to menu for now. later maybe add pause.
+					self.audioHandler.stopSequence(AUDIO_BG_MUSIC);
+					self.changeState(Game.STATE_MENU);
+				}
+
+			} else {
+
+
+				if ( self.inputHandler.isPressed(VK_ESCAPE) ) {
+					// go to menu for now. later maybe add pause.
+					self.audioHandler.stopSequence(AUDIO_BG_MUSIC);
+					self.changeState(Game.STATE_MENU);
+				}
+
 			}
 
 			if ( self.inputHandler.isPressed(VK_M) ) {
@@ -1215,6 +1660,9 @@
 			var el = self.getElementAtPos(x,y);
 
 			if ( typeof el === UNDEF ) {
+				return;
+			}
+			if ( el instanceof Wall ) {
 				return;
 			}
 
@@ -1279,14 +1727,14 @@
 			var playerPosBefore = self.player.getActualPosition();
 
 
-			if ( self.state !== Game.STATE_EDIT ) {
+			if ( self.state === Game.STATE_GAME ) {
 				if ( self.player.substep === 0 ) {
 					// when player is on the door, he won the game! :p
 					var elAtPlayerPos = self.getElementAtPos(playerPosBefore.x, playerPosBefore.y);
 					//console.log('Current pos: '+ playerPosBefore.x+'/'+playerPosBefore.y);
 					if ( elAtPlayerPos instanceof Door ) {
 						// won
-						self.state = Game.STATE_WON;
+						self.changeState(Game.STATE_WON);
 						self.player.dirX = 0;
 						self.player.dirY = 0;
 						self.audioHandler.stopSequence(AUDIO_BG_MUSIC);
@@ -1313,7 +1761,7 @@
 
 			// then move the elements
 
-			if ( self.state !== Game.STATE_EDIT ) {
+			if ( self.state === Game.STATE_GAME ) {
 				var elementsToUpdate = self.isReversed ? self.rElements : self.elements;
 				elementsToUpdate.forEach(function(item, idx) {
 					if ( item === null ) {
@@ -1391,7 +1839,7 @@
 				});
 			}
 
-			if ( self.state !== Game.STATE_EDIT ) {
+			if ( self.state === Game.STATE_GAME ) {
 				elementsToUpdate.forEach(function(item, idx) {
 					if ( item === null ) {
 						return;
@@ -1408,7 +1856,7 @@
 
 					// when the thing is falling and collided with the player, let the player die!
 					if ( item.isFalling && item.x <= self.player.x && self.overlaps(item, self.player) ) {
-						self.state = Game.STATE_GAMEOVER;
+						self.changeState(Game.STATE_GAMEOVER);
 						self.audioHandler.stopSequence(AUDIO_BG_MUSIC);
 						self.audioHandler.play(AUDIO_DEATH);
 						//self.audioHandler.playSequence('deathsong');
@@ -1448,7 +1896,7 @@
 					unmove = true;
 				} else if ( self.player.dirX !== 0 ) {
 
-					if ( self.state !== Game.STATE_EDIT ) {
+					if ( self.state === Game.STATE_GAME ) {
 						// check left right elements if player can move there
 						// moving horizontally
 						var nextEl= self.getElementAtPos(playerPosBefore.x+self.player.dirX, playerPosBefore.y);
@@ -1474,7 +1922,7 @@
 						}
 					}
 				} else if ( self.player.dirY !== 0 ) {
-					if ( self.state !== Game.STATE_EDIT ) {
+					if ( self.state === Game.STATE_GAME ) {
 						// check top/bottom elements
 						// moving vertically
 
@@ -1506,7 +1954,7 @@
 				self.audioHandler.play(AUDIO_WALK);
 			}
 
-			if ( self.state !== Game.STATE_EDIT ) {
+			if ( self.state === Game.STATE_GAME ) {
 				// player pos to index:
 				var playerPosAfter = self.player.getActualPosition();
 
@@ -1516,7 +1964,7 @@
 				} else if ( elAtPlayer.isDeadly ) {
 
 					// die!!!! :3
-					self.state = Game.STATE_GAMEOVER;
+					self.changeState(Game.STATE_GAMEOVER);
 					self.audioHandler.stopSequence(AUDIO_BG_MUSIC);
 					self.audioHandler.play(AUDIO_DEATH);
 
@@ -1614,12 +2062,31 @@
 			} else if ( self.state === Game.STATE_GAME ) {
 				statusText = 'Gems: '+ self.player.gemCount + '/' + self.gemTarget;
 			} else if ( self.state === Game.STATE_EDIT ) {
-				statusText = 'Edit Mode';
+				statusText = 'Gem Target:'+self.gemTarget;
 			}
 
 
 			if ( self.state === Game.STATE_EDIT ) {
-				var x = 340, y = VISIBLE_HEIGHT*TILE_SIZE + HALF_TILE_SIZE - HALF_FONT_SIZE;
+				var x = statusText.length*FONT_SIZE+FONT_SIZE+HALF_FONT_SIZE,
+					y = VISIBLE_HEIGHT*TILE_SIZE + HALF_TILE_SIZE - HALF_FONT_SIZE;
+
+
+
+				self.font.renderText(
+					self.context,
+					'X: remove element   E: set element  O: fill map  P: clear map',
+					HALF_FONT_SIZE,
+					VISIBLE_HEIGHT*TILE_SIZE-FONT_SIZE-HALF_FONT_SIZE,
+					16 // smaller font
+				);
+				self.font.renderText(
+					self.context,
+					'SPACE: next element  T+Number: gem target  T+T: auto gem target',
+					HALF_FONT_SIZE,
+					VISIBLE_HEIGHT*TILE_SIZE-FONT_SIZE-HALF_FONT_SIZE+24,
+					16 // smaller font
+				);
+
 
 				self.allEditElements.forEach(function(i) {
 
@@ -1669,8 +2136,39 @@
 
 		drawMenu: function() {
 			var self = this;
-			self.font.renderText(self.context, 'SPACE: Start Game', 50, 50);
-			self.font.renderText(self.context, 'E:     Edit Map', 50, 50+FONT_SIZE+HALF_FONT_SIZE);
+			var y = 50;
+			self.font.renderText(self.context, 'SPACE: Start random game', 50, y);
+			y+=FONT_SIZE+HALF_FONT_SIZE;
+			self.font.renderText(self.context, 'L:     Load Map', 50, y);
+			y+=FONT_SIZE+HALF_FONT_SIZE;
+			self.font.renderText(self.context, 'E:     Edit Map', 50, y);
+		},
+
+		drawSave: function() {
+			var self = this;
+			var y = 50;
+			self.font.renderText(self.context, 'Save map', 50, y);
+			y+=FONT_SIZE+HALF_FONT_SIZE;
+			self.font.renderText(self.context, 'Name: '+self.editCurrentMapName, 50, y);
+			if ( self.saveMapError ) {
+				console.log(self.saveMapError);
+				y+=FONT_SIZE+HALF_FONT_SIZE;
+				y+=FONT_SIZE+HALF_FONT_SIZE;
+				self.font.renderText(self.context, 'Hint: '+self.saveMapError, 50, y);
+			}
+		},
+		drawLoad: function() {
+			var self = this;
+			var y = 50;
+			self.font.renderText(self.context, 'Load map', 50, y);
+			y+=FONT_SIZE+HALF_FONT_SIZE;
+			self.font.renderText(self.context, 'Name: '+self.editCurrentMapName, 50, y);
+			if ( self.loadMapError ) {
+				console.log(self.loadMapError);
+				y+=FONT_SIZE+HALF_FONT_SIZE;
+				y+=FONT_SIZE+HALF_FONT_SIZE;
+				self.font.renderText(self.context, 'Hint: '+self.loadMapError, 50, y);
+			}
 		},
 
 		render: function() {
@@ -1680,11 +2178,11 @@
 
 				self.drawMenu();
 
-			} else if ( self.state === Game.STATE_EDIT ) {
+			} else if ( self.state === Game.STATE_LOADMAP ) {
 
-				self.drawElements();
-				self.drawHud();
-				self.player.render(self.context);
+				self.drawLoad();
+			} else if ( self.state === Game.STATE_SAVEMAP ) {
+				self.drawSave();
 
 			} else {
 				// render everything
@@ -1695,182 +2193,49 @@
 			}
 		},
 
-		start: function() {
-
+		start: function( mapObj ) {
 
 			this.startTime = new Date().getTime();
+
+			this.messages = [];
 			this.messages.push(new Message(this, 'Welcome..', 300));
 			this.messages.push(new Message(this, '...to the jungle..', 300));
 
-
+			this.audioHandler.stopSequence(AUDIO_BG_MUSIC);
 			this.audioHandler.playSequence(AUDIO_BG_MUSIC);
 
+			if ( mapObj ) {
+				this.readMap(mapObj);
+			} else {
+				this.randomMap();
+			}
+			this.changeState(Game.STATE_GAME);
+		},
 
+		startEdit: function( map ) {
 
-			this.elements = [];
-			this.rElements = [];
+			this.startTime = new Date().getTime();
 
-			this.gemCount = 0;
-
-			var G = 'g';
-			var S = 's';
-			var R = 'r';
-			var L = 'l';
-			var E = 'e';
-			var D = 'd';
-			var B = 'b';
-			var X = 'X';
-			var map = [
-				G,S,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,
-				G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,
-				G,G,E,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,
-				G,R,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,
-				G,R,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,
-				G,G,D,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,
-				G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,
-				G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,
-				G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,
-				G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,
-				G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,
-				G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,
-				G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,
-				G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,
-				G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,
-				G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,
-				G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,
-				G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,
-				G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,
-				G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,
-				G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,
-				G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,
-				G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,
-				G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G,G
-			];
-			//map = false;
+			this.audioHandler.stopSequence(AUDIO_BG_MUSIC);
+			this.audioHandler.playSequence(AUDIO_BG_MUSIC);
 
 			if ( map ) {
-				for ( var i = 0; i < map.length; i++ ) {
-					this.elements.push(null);
-					this.rElements.push(null);
-				}
-				var x, y;
-				for ( var i = 0; i < map.length; i++ ) {
-					var el = null;
-					var rel = null;
-					x = (i%MAP_SIZE_X) * TILE_SIZE;
-					y = parseInt(i/MAP_SIZE_X, 10) * TILE_SIZE;
-					switch ( map[i] ) {
-						case G:
-							this.setElementAtIndex(i, new Grass(this, x, y));
-							break;
-						case L:
-							this.setElementAtIndex(i, new Lava(this, x, y));
-							break;
-						case B:
-							this.setElementAtIndex(i, new Bomb(this, x, y));
-							break;
-						case S:
-							this.setElementAtIndex(i, new Stone(this, x, y));
-							break;
-						case E:
-							this.setElementAtIndex(i, new Emerald(this, x, y));
-							break;
-						case R:
-							this.setElementAtIndex(i, new Ruby(this, x, y));
-							break;
-						case D:
-							this.setElementAtIndex(i, new Door(this, x, y));
-							break;
-						default: break;
-					}
-				}
-				this.gemTarget = this.gemCount;
-
+				this.readMap(map);
 			} else {
-
+				this.elements = [];
+				this.rElements = [];
+				this.gemCount = 0;
+				this.gemTarget = 0;
 				for ( var i = 0; i < MAP_SIZE_Y*MAP_SIZE_X; i++ ) {
 					this.elements.push(null);
 					this.rElements.push(null);
 				}
-
-				var index = 0;
-				var x, y;
-				for ( var j = 0; j < MAP_SIZE_Y; j++ ) {
-					for ( var i = 0; i < MAP_SIZE_X; i++ ) {
-
-						var rnd = Rnd();
-						x = i*TILE_SIZE;
-						y = j*TILE_SIZE;
-
-						if ( rnd > 0.99 ) {
-							this.setElementAtIndex(index, new Ruby(this, x, y));
-							//this.rElements.push(new Bomb(this, i*TILE_SIZE, j*TILE_SIZE));
-						} else if ( rnd > 0.97 ) {
-							this.setElementAtIndex(index, null);
-							//this.rElements.push(new Grass(this, i*TILE_SIZE, j*TILE_SIZE));
-							//this.elements.push(null);
-						} else if ( rnd > 0.9 ) {
-							this.setElementAtIndex(index, new Bomb(this, x, y));
-							//this.elements.push(new Bomb(this, i*TILE_SIZE, j*TILE_SIZE));
-							//this.rElements.push(new Ruby(this, i*TILE_SIZE, j*TILE_SIZE));
-						} else if ( rnd > 0.8 ) {
-							this.setElementAtIndex(index, new Emerald(this, x, y));
-							//this.elements.push(new Emerald(this, i*TILE_SIZE, j*TILE_SIZE));
-							//this.rElements.push(new Stone(this, i*TILE_SIZE, j*TILE_SIZE));
-						} else if ( rnd > 0.7 ) {
-							this.setElementAtIndex(index, new Stone(this, x, y));
-							//this.elements.push(new Stone(this, i*TILE_SIZE, j*TILE_SIZE));
-							//this.rElements.push(new Emerald(this, i*TILE_SIZE, j*TILE_SIZE));
-						} else if ( rnd > 0.35 ) {
-							this.setElementAtIndex(index, new Grass(this, x, y));
-							//this.elements.push(new Grass(this, i*TILE_SIZE, j*TILE_SIZE));
-							//this.rElements.push(null);
-						} else {
-							this.setElementAtIndex(index, new Lava(this, x, y));
-						}
-						index++;
-					}
-				}
-				// generate a door at a random position
-				var randX = Rnd()*MAP_SIZE_X | 0;
-				var randY = Rnd()*MAP_SIZE_Y | 0;
-				this.setElementAtIndex(randY*MAP_SIZE_X+randX, new Door(this, randX*TILE_SIZE, randY*TILE_SIZE));
-				//console.log('door at : '+randX+'/'+randY);
-
-				this.gemTarget = (this.gemCount * 0.75) | 0;
-
+				this.player = new Player(this, 0, 0);
 			}
-
-
-			this.player = new Player(this, 0, 0);
-
-
-			this.state = Game.STATE_GAME;
-		},
-
-		startEdit: function() {
-
-			this.messages.push(new Message(this, 'PRESS SPACE to switch elements.', 500));
-			this.messages.push(new Message(this, 'PRESS/HOLD E to set elements.', 500));
-
-			this.startTime = new Date().getTime();
-			this.audioHandler.playSequence(AUDIO_BG_MUSIC);
-
-			this.elements = [];
-			this.rElements = [];
-
-			this.gemCount = 0;
-
-			for ( var i = 0; i < MAP_SIZE_Y*MAP_SIZE_X; i++ ) {
-				this.elements.push(null);
-				this.rElements.push(null);
-			}
-
-			this.player = new Player(this, 0, 0);
 
 
 			this.editCurrentElement = ELEMENT_GRASS;
-			this.state = Game.STATE_EDIT;
+			this.changeState(Game.STATE_EDIT);
 
 		},
 		reset: function() {
