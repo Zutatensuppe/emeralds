@@ -23,23 +23,23 @@
 	var SPRITE_FONT_SIZE = 8;
 
 	// some key codes:
-	const VK_SPACE = 32;
-	const VK_LEFT = 37;
-	const VK_UP = 38;
-	const VK_RIGHT = 39;
-	const VK_DOWN = 40;
-	const VK_E = 69;
-	const VK_M = 77;
-	const VK_O = 79;
-	const VK_P = 80;
-	const VK_R = 82;
-	const VK_S = 83;
-	const VK_L = 76;
-	const VK_T = 84;
-	const VK_X = 88;
-	const VK_RETURN = 13;
-	const VK_ESCAPE = 27;
-	const VK_BACKSPACE = 8;
+	var VK_SPACE = 32;
+	var VK_LEFT = 37;
+	var VK_UP = 38;
+	var VK_RIGHT = 39;
+	var VK_DOWN = 40;
+	var VK_E = 69;
+	var VK_M = 77;
+	var VK_O = 79;
+	var VK_P = 80;
+	var VK_R = 82;
+	var VK_S = 83;
+	var VK_L = 76;
+	var VK_T = 84;
+	var VK_X = 88;
+	var VK_RETURN = 13;
+	var VK_ESCAPE = 27;
+	var VK_BACKSPACE = 8;
 
 	var INSTRUMENT_CYMBAL = 1;
 	var INSTRUMENT_DRUM = 2;
@@ -63,6 +63,10 @@
 	var AUDIO_WALK = 7;
 	var AUDIO_REVERSE = 8;
 
+
+	/////////////////////////////////////////////////////////////////
+	// Numeric representation of the elements
+	/////////////////////////////////////////////////////////////////
 	var ELEMENT_GRASS = 0;
 	var ELEMENT_STONE = 1;
 	var ELEMENT_BOMB = 2;
@@ -71,7 +75,8 @@
 	var ELEMENT_LAVA = 5;
 	var ELEMENT_DOOR = 6;
 	var ELEMENT_WALL = 7;
-
+	var ELEMENT_NULL = 8;
+	var ELEMENT_EXPLOSION = 9;
 
 
 	/////////////////////////////////////////////////////////////////
@@ -96,22 +101,6 @@
 	var STR_MSG_DOOR_OPENED = 'Door was opened!!';
 
 
-	/////////////////////////////////////////////////////////////////
-	// map tiles in saved map objects
-	/////////////////////////////////////////////////////////////////
-	var G = 'g';
-	var S = 's';
-	var R = 'r';
-	var L = 'l';
-	var E = 'e';
-	var D = 'd';
-	var B = 'b';
-	var W = 'W';
-	var X = 'X';
-
-
-
-
 
 
 	/////////////////////////////////////////////////////////////////
@@ -123,36 +112,20 @@
 	var CONSTRUCTOR = 'constructor';
 
 
-	/////////////////////////////////////////////////////////////////
-	// Math Random Wrapper to save some bytes
-	// (Saves bytes from 4 usages upwards)
-	/////////////////////////////////////////////////////////////////
-	function Rnd() {
-		return Math.random();
-	}
-
-
-
-
 
 	/////////////////////////////////////////////////////////////////
 	// Sprite/Graphics
 	/////////////////////////////////////////////////////////////////
 
 	function Sprite( file, cb ) {
-
-		this.images = [];
-
-		// init the sprite images
-		var imageObj = new Image();
-		imageObj.onload = cb;
-		imageObj.src =file;
-		this.images[0] = imageObj;
-
+		// init the sprite image
+		this.image = new Image();
+		this.image.onload = cb;
+		this.image.src = file;
 	}
 	Sprite[PROTO] = {
 		render: function(screen, sX, sY, sW, sH, dX, dY, dW, dH) {
-			screen.drawImage(this.images[0], sX, sY, sW, sH, dX, dY, dW, dH );
+			screen.drawImage(this.image, sX, sY, sW, sH, dX, dY, dW, dH );
 		}
 	};
 
@@ -165,64 +138,61 @@
 	}
 	Gfx[PROTO] = {
 		render: function(screen, destX, destY, shiftX, shiftY, TS) {
+			var self = this;
+			TS = TS || TILE_SIZE;
+			if ( !shiftX && !shiftY ) {
+				self.sprite.render(screen, this.x, this.y, this.w, this.h, destX, destY, TS, TS);
+				return;
+			}
+			// wrap the sprite image
 
 			shiftX = shiftX || 0;
 			shiftY = shiftY || 0;
 
-			TS = TS || TILE_SIZE;
-			if ( shiftX || shiftY ) {
-				// wrap the sprite image
+			var ratioX = TS / self.w;
+			var ratioY = TS / self.h;
 
-				var ratioX = TS / this.w;
-				var ratioY = TS / this.h;
-
-				var w1, w2, h1, h2;
-				if ( shiftX ) {
-					w2 = Math.abs(shiftX);
-					w1 = this.w - w2;
-				} else {
-					w2 = this.w;
-					w1 = this.w;
-				}
-				if ( shiftY ) {
-					h2 = Math.abs(shiftY);
-					h1 = this.h - h2;
-				} else {
-					h2 = this.h;
-					h1 = this.h;
-				}
-
-				// render part 1
-				this.sprite.render(
-					screen,
-					this.x + shiftX,
-					this.y + shiftY,
-					w1,
-					h1,
-					destX,
-					destY,
-					w1*ratioX,
-					h1*ratioY
-				);
-
-				// render part 2
-				this.sprite.render(
-					screen,
-					this.x,
-					this.y,
-					w2,
-					h2,
-					shiftX ? (destX + w1 * ratioX ) : destX,
-					shiftY ? (destY + h1 * ratioY ) : destY,
-					w2*ratioX,
-					h2*ratioY
-				);
-
+			var w1, w2, h1, h2;
+			if ( shiftX ) {
+				w2 = Math.abs(shiftX);
+				w1 = self.w - w2;
 			} else {
-
-				this.sprite.render(screen, this.x, this.y, this.w, this.h, destX, destY, TS, TS);
-
+				w2 = self.w;
+				w1 = self.w;
 			}
+			if ( shiftY ) {
+				h2 = Math.abs(shiftY);
+				h1 = self.h - h2;
+			} else {
+				h2 = self.h;
+				h1 = self.h;
+			}
+
+			// render part 1
+			self.sprite.render(
+				screen,
+				self.x + shiftX,
+				self.y + shiftY,
+				w1,
+				h1,
+				destX,
+				destY,
+				w1*ratioX,
+				h1*ratioY
+			);
+
+			// render part 2
+			self.sprite.render(
+				screen,
+				self.x,
+				self.y,
+				w2,
+				h2,
+				shiftX ? (destX + w1 * ratioX ) : destX,
+				shiftY ? (destY + h1 * ratioY ) : destY,
+				w2*ratioX,
+				h2*ratioY
+			);
 
 		}
 	};
@@ -237,26 +207,17 @@
 			'567890/'+
 			'+"';
 		this.sprite = sprite;
+		// left upper corner of "letter" block in sprite
+		this.x = 64;
+		this.y = 0;
+
 	}
 	Font[PROTO] = {
-		posInSprite: function(letter) {
-			var xstart = 64;
-			var ystart = 0;
-			// 7 letters per col
-			var letterIdx = this.letters.indexOf(letter);
-			if ( letterIdx >= 0 ) {
-				// found the letter
-				return {
-					x: xstart + ((letterIdx/7) | 0)*8,
-					y: ystart + ((letterIdx%7)*8)
-				};
-			}
-			return false;
-		},
 		renderText: function(screen, text, x, y, FS) {
 			FS = FS || FONT_SIZE;
 			text = text.toLowerCase();
 			var _x = x;
+			var self = this;
 			for ( var i = 0, iLen = text.length; i < iLen; i++ ) {
 				var chr = text.charAt(i);
 				if ( chr === "\n" ) {
@@ -264,9 +225,23 @@
 					_x = x;
 					continue;
 				}
-				var posInSprite = this.posInSprite(chr);
-				if ( posInSprite ) {
-					this.sprite.render(screen, posInSprite.x, posInSprite.y, SPRITE_FONT_SIZE, SPRITE_FONT_SIZE, _x, y, FS, FS);
+				// find pos in sprite:
+
+				var letterIdx = self.letters.indexOf(chr);
+				if ( letterIdx >= 0 ) {
+					// found the letter
+					self.sprite.render(
+						screen,
+						// 7 letters per col
+						self.x + ((letterIdx/7) | 0)*8,
+						self.y + (letterIdx%7)*8,
+						SPRITE_FONT_SIZE,
+						SPRITE_FONT_SIZE,
+						_x,
+						y,
+						FS,
+						FS
+					);
 				}
 				_x+=FS;
 			}
@@ -281,51 +256,56 @@
 	// Input
 	/////////////////////////////////////////////////////////////////
 	function VirtualKey() {
-		this.isPressed = false;
-		this.isDown = false;
-		this.presses = 0;
-		this.absorbs = 0;
+		var self = this;
+		self.isPressed = false;
+		self.isDown = false;
+		self.presses = 0;
+		self.absorbs = 0;
 	}
 	VirtualKey[PROTO] = {
 		toggle: function(pressed) {
-			if ( pressed !== this.isDown ) {
-				this.isDown = pressed;
+			var self = this;
+			if ( pressed !== self.isDown ) {
+				self.isDown = pressed;
 			}
 			if ( pressed ) {
-				this.presses++;
+				self.presses++;
 			}
 		},
 		tick: function() {
-			if ( this.absorbs < this.presses ) {
-				this.absorbs++;
-				this.isPressed = true;
+			var self = this;
+			if ( self.absorbs < self.presses ) {
+				self.absorbs++;
+				self.isPressed = true;
 			} else {
-				this.isPressed = false;
+				self.isPressed = false;
 			}
 		},
 		reset: function() {
-			this.isPressed = false;
-			this.isDown = false;
-			this.presses = 0;
-			this.absorbs = 0;
+			var self = this;
+			self.isPressed = false;
+			self.isDown = false;
+			self.presses = 0;
+			self.absorbs = 0;
 		}
 	};
 
 	function InputHandler() {
-		this.keys = {};
+		var self = this;
+
+		self.vk = {};
 
 		// special keys are added here
 		// normal letters and numbers are created on the fly
-		this.keys[VK_LEFT] = new VirtualKey();
-		this.keys[VK_RIGHT] = new VirtualKey();
-		this.keys[VK_UP] = new VirtualKey();
-		this.keys[VK_DOWN] = new VirtualKey();
-		this.keys[VK_SPACE] = new VirtualKey();
-		this.keys[VK_RETURN] = new VirtualKey();
-		this.keys[VK_ESCAPE] = new VirtualKey();
-		this.keys[VK_BACKSPACE] = new VirtualKey();
+		self.vk[VK_LEFT] = new VirtualKey();
+		self.vk[VK_RIGHT] = new VirtualKey();
+		self.vk[VK_UP] = new VirtualKey();
+		self.vk[VK_DOWN] = new VirtualKey();
+		self.vk[VK_SPACE] = new VirtualKey();
+		self.vk[VK_RETURN] = new VirtualKey();
+		self.vk[VK_ESCAPE] = new VirtualKey();
+		self.vk[VK_BACKSPACE] = new VirtualKey();
 
-		var self = this;
 		window.addEventListener('keydown', function(e) {
 			self.toggle(e, true);
 		});
@@ -335,36 +315,32 @@
 	}
 	InputHandler[PROTO] = {
 		toggle: function(e, pressed) {
+			var keyCode = e.keyCode;
+			var self = this;
 			// 0-9 and a-z
-			if ( !this.keys[e.keyCode] && e.keyCode >= 48 && e.keyCode <= 90 ) {
-				this.keys[e.keyCode] = new VirtualKey();
+			if ( !self.vk[keyCode] && keyCode >= 48 && keyCode <= 90 ) {
+				self.vk[keyCode] = new VirtualKey();
 			}
-			if ( this.keys[e.keyCode] ) {
-				this.keys[e.keyCode].toggle(pressed);
+			if ( self.vk[keyCode] ) {
+				self.vk[keyCode].toggle(pressed);
 				e.preventDefault();
 			}
 		},
 		tick: function() {
-			for ( var idx in this.keys ) {
-				if ( ! this.keys.hasOwnProperty(idx) ) {
-					continue;
-				}
-				this.keys[idx].tick();
-			}
+			Object.keys(this.vk).forEach(function(i) {
+				this.vk[i].tick();
+			}, this);
 		},
 		isDown: function(keyCode) {
-			return this.keys[keyCode] && this.keys[keyCode].isDown;
+			return this.vk[keyCode] && this.vk[keyCode].isDown;
 		},
 		isPressed: function(keyCode) {
-			return this.keys[keyCode] && this.keys[keyCode].isPressed;
+			return this.vk[keyCode] && this.vk[keyCode].isPressed;
 		},
 		reset: function() {
-			for ( var idx in this.keys ) {
-				if ( ! this.keys.hasOwnProperty(idx) ) {
-					continue;
-				}
-				this.keys[idx].reset();
-			}
+			Object.keys(this.vk).forEach(function(i) {
+				this.vk[i].reset();
+			}, this);
 		}
 	};
 
@@ -380,13 +356,11 @@
 	AudioHandler[PROTO] = {
 
 		mute: function( mute ) {
-
-			this.isMuted = mute;
-			for ( var key in this.sequences ) {
-				if ( this.sequences.hasOwnProperty(key) ) {
-					this.sequences[key].mute(mute);
-				}
-			}
+			var self = this;
+			self.isMuted = mute;
+			Object.keys(self.sequences).forEach(function(i) {
+				self.sequences[i].mute(mute);
+			});
 		},
 
 		hasSequence: function(key) {
@@ -410,7 +384,7 @@
 		},
 
 		has: function(key) {
-			return !! this.sounds[key];
+			return !!this.sounds[key];
 		},
 		/**
 		 *
@@ -421,12 +395,13 @@
 		 */
 		add: function(key, simultanousCount, soundSettings) {
 
+			var self = this;
 			// create a new array with information about the sound for the given key
-			this.sounds[key] = [];
+			self.sounds[key] = [];
 
 			// foreach sound setting we have given for the key, push an entry
 			soundSettings.forEach(function(item, idx) {
-				this.sounds[key].push({
+				self.sounds[key].push({
 					current: 0,
 					count: simultanousCount,
 					pool: []
@@ -435,11 +410,11 @@
 				for ( var i = 0; i < simultanousCount; i++ ) {
 					var audio = new Audio();
 					audio.src = jsfxr(item);
-					this.sounds[key][idx].pool.push(audio);
+					self.sounds[key][idx].pool.push(audio);
 
 					//this.sounds[key][idx].pool.push(item);
 				}
-			}, this);
+			});
 		},
 		play: function(key) {
 			// fetch the sound for the key
@@ -457,7 +432,7 @@
 			//});
 
 			// get one of the sounds for the specified key randomly
-			var rand = sound.length > 1 ? ((Rnd()*sound.length) | 0) : 0;
+			var rand = sound.length > 1 ? ((Math.random()*sound.length) | 0) : 0;
 			//console.log('playing sound "'+key+'", variant '+rand);
 			var soundData = sound[rand];
 
@@ -488,22 +463,23 @@
 	/* Basic Entity
 	===============================================================*/
 	function Entity( g, gfx, x, y, w, h ) {
-		this.game = g;
-		this.gfx = gfx;
-		this.x = x;
-		this.y = y;
-		this.w = w;
-		this.h = h;
-		this.dirX = 0;
-		this.dirY = 0;
-		this.speed = 0;
-		this.stepsPerTile = 1;
-		this.substep = 0;
-		this.isWalkable = false;
-		this.isPushable = false;
-		this.isDeadly = false;
-		this.isFalling = false;
-		this.wasFalling = false;
+		var self = this;
+		self.game = g;
+		self.gfx = gfx;
+		self.x = x;
+		self.y = y;
+		self.w = w;
+		self.h = h;
+		self.dirX = 0;
+		self.dirY = 0;
+		self.speed = 0;
+		self.stepsPerTile = 1;
+		self.substep = 0;
+		self.isWalkable = false;
+		self.isPushable = false;
+		self.isDeadly = false;
+		self.isFalling = false;
+		self.wasFalling = false;
 	}
 	Entity[PROTO].getActualPosition = function() {
 		return {
@@ -512,56 +488,61 @@
 		};
 	};
 	Entity[PROTO].move = function() {
-			this.x = this.x+this.dirX*this.speed;
-			this.y = this.y+this.dirY*this.speed;
-		};
+		var self = this;
+		self.x = self.x+self.dirX*self.speed;
+		self.y = self.y+self.dirY*self.speed;
+	};
 	Entity[PROTO].unmove = function() {
-			this.x = this.x-this.dirX*this.speed;
-			this.y = this.y-this.dirY*this.speed;
-		};
+		var self = this;
+		self.x = self.x-self.dirX*self.speed;
+		self.y = self.y-self.dirY*self.speed;
+	};
 	Entity[PROTO].render = function(context) {
-		this.gfx.render(context, this.x - this.game.renderStartX, this.y - this.game.renderStartY);
+		var self = this;
+		self.gfx.render(context, self.x - self.game.renderStartX, self.y - self.game.renderStartY);
 	};
 
 
 	/* The Player
 	===============================================================*/
 	function Player(g, x, y) {
-		Entity[PROTO][CONSTRUCTOR].call(this, g, null, x, y, TILE_SIZE, TILE_SIZE);
-		this.speed = OBJECT_SPEED;
-		this.stepsPerTile = TILE_SIZE/this.speed;
-		this.substep = 0; // max TILE_SIZE/this.speed
-		this.gemCount = 0;
+		var self = this;
+		Entity[PROTO][CONSTRUCTOR].call(self, g, null, x, y, TILE_SIZE, TILE_SIZE);
+		self.speed = OBJECT_SPEED;
+		self.stepsPerTile = TILE_SIZE/self.speed;
+		self.substep = 0; // max TILE_SIZE/this.speed
+		self.gemCount = 0;
 
-		this.gfx = new Gfx(g.sprite, 16, 16, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE);
-		this.gfxRight = [new Gfx(g.sprite, 32, 16, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE), new Gfx(g.sprite, 16, 32, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE)];
-		this.gfxLeft = [new Gfx(g.sprite, 0, 32, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE), new Gfx(g.sprite, 0, 48, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE)];
-		this.gfxDown = [new Gfx(g.sprite, 16, 48, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE), new Gfx(g.sprite, 16, 64, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE)];
-		this.gfxUp = [new Gfx(g.sprite, 0, 80, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE), new Gfx(g.sprite, 16, 80, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE)];
+		self.gfx = new Gfx(g.sprite, 16, 16, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE);
+		self.gfxRight = [new Gfx(g.sprite, 32, 16, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE), new Gfx(g.sprite, 16, 32, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE)];
+		self.gfxLeft = [new Gfx(g.sprite, 0, 32, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE), new Gfx(g.sprite, 0, 48, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE)];
+		self.gfxDown = [new Gfx(g.sprite, 16, 48, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE), new Gfx(g.sprite, 16, 64, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE)];
+		self.gfxUp = [new Gfx(g.sprite, 0, 80, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE), new Gfx(g.sprite, 16, 80, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE)];
 
 	}
 	Player[PROTO] = Object.create(Entity[PROTO]);
 	Player[PROTO][CONSTRUCTOR] = Player;
 	Player[PROTO].render = function(context) {
 
-		var screenX = this.x - this.game.renderStartX;
-		var screenY = this.y - this.game.renderStartY;
+		var self = this;
+		var screenX = self.x - self.game.renderStartX;
+		var screenY = self.y - self.game.renderStartY;
 
-		if (  this.game.state === Game.STATE_GAME || this.game.state === Game.STATE_EDIT ) {
-			var frame = this.game.ticks % 24 < 12 ? 1 : 0;
-			if ( this.dirX < 0 ) {
-				this.gfxLeft[frame].render(context, screenX, screenY);
-			} else if ( this.dirX > 0 ) {
-				this.gfxRight[frame].render(context, screenX, screenY);
-			} else if ( this.dirY > 0 ) {
-				this.gfxDown[frame].render(context, screenX, screenY);
-			} else if ( this.dirY < 0 ) {
-				this.gfxUp[frame].render(context, screenX, screenY);
+		if (  self.game.state === Game.STATE_GAME || self.game.state === Game.STATE_EDIT ) {
+			var frame = self.game.ticks % 24 < 12 ? 1 : 0;
+			if ( self.dirX < 0 ) {
+				self.gfxLeft[frame].render(context, screenX, screenY);
+			} else if ( self.dirX > 0 ) {
+				self.gfxRight[frame].render(context, screenX, screenY);
+			} else if ( self.dirY > 0 ) {
+				self.gfxDown[frame].render(context, screenX, screenY);
+			} else if ( self.dirY < 0 ) {
+				self.gfxUp[frame].render(context, screenX, screenY);
 			} else {
-				this.gfx.render(context, screenX, screenY);
+				self.gfx.render(context, screenX, screenY);
 			}
 		} else {
-			this.gfx.render(context, screenX, screenY);
+			self.gfx.render(context, screenX, screenY);
 		}
 	};
 
@@ -575,12 +556,13 @@
 	/* Stone
 	===============================================================*/
 	function Stone(g, x, y){
-		Entity[PROTO][CONSTRUCTOR].call(this, g, g.elementGraphics[ELEMENT_STONE], x, y, TILE_SIZE, TILE_SIZE);
-		this.speed = OBJECT_SPEED;
-		this.stepsPerTile = TILE_SIZE/this.speed;
-		this.substep = 0; // max TILE_SIZE/this.speed
-		this.isWalkable = false;
-		this.isPushable = true;
+		var self = this;
+		Entity[PROTO][CONSTRUCTOR].call(self, g, g.elementGraphics[ELEMENT_STONE], x, y, TILE_SIZE, TILE_SIZE);
+		self.speed = OBJECT_SPEED;
+		self.stepsPerTile = TILE_SIZE/self.speed;
+		self.substep = 0; // max TILE_SIZE/self.speed
+		self.isWalkable = false;
+		self.isPushable = true;
 	}
 	Stone[PROTO] = Object.create(Entity[PROTO]);
 	Stone[PROTO][CONSTRUCTOR] = Stone;
@@ -588,12 +570,13 @@
 	/* Bomb
 	===============================================================*/
 	function Bomb(g, x, y){
-		Entity[PROTO][CONSTRUCTOR].call(this, g, g.elementGraphics[ELEMENT_BOMB], x, y, TILE_SIZE, TILE_SIZE);
-		this.speed = OBJECT_SPEED;
-		this.stepsPerTile = TILE_SIZE/this.speed;
-		this.substep = 0; // max TILE_SIZE/this.speed
-		this.isWalkable = false;
-		this.isPushable = true;
+		var self = this;
+		Entity[PROTO][CONSTRUCTOR].call(self, g, g.elementGraphics[ELEMENT_BOMB], x, y, TILE_SIZE, TILE_SIZE);
+		self.speed = OBJECT_SPEED;
+		self.stepsPerTile = TILE_SIZE/self.speed;
+		self.substep = 0; // max TILE_SIZE/self.speed
+		self.isWalkable = false;
+		self.isPushable = true;
 	}
 	Bomb[PROTO] = Object.create(Entity[PROTO]);
 	Bomb[PROTO][CONSTRUCTOR] = Bomb;
@@ -621,33 +604,34 @@
 	/* Gem
 	 ===============================================================*/
 	function Gem(g, gfx, x, y, w, h) {
-		Entity[PROTO][CONSTRUCTOR].call(this, g, gfx, x, y, w, h);
-		this.isWalkable = true;
-		this.value = 0;
-		this.collectSound = '';
+		var self = this;
+		Entity[PROTO][CONSTRUCTOR].call(self, g, gfx, x, y, w, h);
+		self.isWalkable = true;
+		self.value = 0;
+		self.collectSound = '';
 	}
 	Gem[PROTO] = Object.create(Entity[PROTO]);
 	Gem[PROTO][CONSTRUCTOR] = Gem;
 	Gem[PROTO].playCollectSound = function() {
-		this.game.audioHandler.play(this.collectSound);
-		this.game.audioHandler.playSequence(this.collectSound);
+		var self = this;
+		self.game.audioHandler.play(self.collectSound);
+		self.game.audioHandler.playSequence(self.collectSound);
 	};
 
 	/* Emerald
 	 ===============================================================*/
 	function Emerald(g, x, y){
-		Gem[PROTO][CONSTRUCTOR].call(this, g, g.elementGraphics[ELEMENT_EMERALD], x, y, TILE_SIZE, TILE_SIZE);
-		this.value = 1;
-		this.collectSound = AUDIO_EMERALD;
-		g.gemCount+=this.value;
+		var self = this;
+		Gem[PROTO][CONSTRUCTOR].call(self, g, g.elementGraphics[ELEMENT_EMERALD], x, y, TILE_SIZE, TILE_SIZE);
+		self.value = 1;
+		self.collectSound = AUDIO_EMERALD;
+		g.gemCount+=self.value;
 
 		// emerald sound
 		if ( !g.audioHandler.has(AUDIO_EMERALD) ) {
-			g.audioHandler.add(AUDIO_EMERALD, 5,
-				[
-					[0,,0.0881,0.4996,0.2593,0.8492,,,,,,0.2308,0.6901,,,,,,1,,,,,0.5]
-				]
-			);
+			g.audioHandler.add(AUDIO_EMERALD, 5, [
+				[0,,0.0881,0.4996,0.2593,0.8492,,,,,,0.2308,0.6901,,,,,,1,,,,,0.5]
+			]);
 		}
 
 
@@ -658,10 +642,11 @@
 	/* Ruby
 	 ===============================================================*/
 	function Ruby(g, x, y){
-		Gem[PROTO][CONSTRUCTOR].call(this, g, g.elementGraphics[ELEMENT_RUBY], x, y, TILE_SIZE, TILE_SIZE);
-		this.value = 5;
-		this.collectSound = AUDIO_RUBY;
-		g.gemCount+=this.value;
+		var self = this;
+		Gem[PROTO][CONSTRUCTOR].call(self, g, g.elementGraphics[ELEMENT_RUBY], x, y, TILE_SIZE, TILE_SIZE);
+		self.value = 5;
+		self.collectSound = AUDIO_RUBY;
+		g.gemCount+=self.value;
 
 		// ruby sound
 		if ( !g.audioHandler.hasSequence(AUDIO_RUBY) ) {
@@ -684,10 +669,11 @@
 	/* Explosion
 	===============================================================*/
 	function Explosion(g, x, y) {
-		Entity[PROTO][CONSTRUCTOR].call(this, g, new Gfx(g.sprite, 48, 0, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE), x, y, TILE_SIZE, TILE_SIZE);
-		this.isWalkable = true;
-		this.ticktick = 10;
-		this.isDeadly = true;
+		var self = this;
+		Entity[PROTO][CONSTRUCTOR].call(self, g, new Gfx(g.sprite, 48, 0, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE), x, y, TILE_SIZE, TILE_SIZE);
+		self.isWalkable = true;
+		self.ticktick = 10;
+		self.isDeadly = true;
 	}
 	Explosion[PROTO] = Object.create(Entity[PROTO]);
 	Explosion[PROTO][CONSTRUCTOR] = Explosion;
@@ -702,11 +688,12 @@
 	Lava[PROTO] = Object.create(Entity[PROTO]);
 	Lava[PROTO][CONSTRUCTOR] = Lava;
 	Lava[PROTO].render = function(context) {
+		var self = this;
 		var shift = 0;
-		if ( this.game.state === Game.STATE_GAME || this.game.state === Game.STATE_EDIT ) {
-			shift = this.game.ticks % 256 / 32 | 0;
+		if ( self.game.state === Game.STATE_GAME || self.game.state === Game.STATE_EDIT ) {
+			shift = self.game.ticks % 256 / 32 | 0;
 		}
-		this.gfx.render(context, this.x - this.game.renderStartX, this.y - this.game.renderStartY, shift);
+		self.gfx.render(context, self.x - self.game.renderStartX, self.y - self.game.renderStartY, shift);
 	};
 
 	/* Dummy
@@ -722,13 +709,14 @@
 	/* Door
 	===================================================================*/
 	function Door(g, x, y) {
-		Entity[PROTO][CONSTRUCTOR].call(this, g, null, x, y, TILE_SIZE, TILE_SIZE);
-		this.isWalkable = false;
-		this.isOpen = false;
-		this.stepsPerTile = TILE_SIZE/OBJECT_SPEED;
+		var self = this;
+		Entity[PROTO][CONSTRUCTOR].call(self, g, null, x, y, TILE_SIZE, TILE_SIZE);
+		self.isWalkable = false;
+		self.isOpen = false;
+		self.stepsPerTile = TILE_SIZE/OBJECT_SPEED;
 
-		this.gfx = g.elementGraphics[ELEMENT_DOOR];
-		this.gfxOpen = [new Gfx(this.game.sprite, 32, 48, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE), new Gfx(this.game.sprite, 32, 64, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE)];
+		self.gfx = g.elementGraphics[ELEMENT_DOOR];
+		self.gfxOpen = [new Gfx(self.game.sprite, 32, 48, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE), new Gfx(self.game.sprite, 32, 64, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE)];
 	}
 	Door[PROTO] = Object.create(Entity[PROTO]);
 	Door[PROTO][CONSTRUCTOR] = Door;
@@ -737,12 +725,13 @@
 		this.isWalkable = true;
 	};
 	Door[PROTO].render = function(context) {
-		if ( (this.game.state === Game.STATE_GAME || this.game.state === Game.STATE_EDIT) && this.isOpen ) {
-			var frame = this.game.ticks % 32 < 16 ? 1 : 0;
-			//this.frame = ( this.substep > this.stepsPerTile / 2 ) ? 1 : 0;
-			this.gfxOpen[frame].render(context, this.x - this.game.renderStartX, this.y - this.game.renderStartY);
+		var self = this;
+		if ( (self.game.state === Game.STATE_GAME || self.game.state === Game.STATE_EDIT) && self.isOpen ) {
+			var frame = self.game.ticks % 32 < 16 ? 1 : 0;
+			//self.frame = ( self.substep > self.stepsPerTile / 2 ) ? 1 : 0;
+			self.gfxOpen[frame].render(context, self.x - self.game.renderStartX, self.y - self.game.renderStartY);
 		} else {
-			this.gfx.render(context, this.x - this.game.renderStartX, this.y - this.game.renderStartY);
+			self.gfx.render(context, self.x - self.game.renderStartX, self.y - self.game.renderStartY);
 		}
 	};
 
@@ -773,40 +762,36 @@
 	===============================================================*/
 	function Game() {
 		var self = this;
-		this.canvas = document.getElementById('g');
-		this.context = this.canvas.getContext('2d');
-		this.context.mozImageSmoothingEnabled = false;
-		this.context.webkitImageSmoothingEnabled = false;
-		this.context.msImageSmoothingEnabled = false;
-		this.context.imageSmoothingEnabled = false;
-		this.font = null;
-		this.ticks = 0;
+		self.canvas = document.getElementById('g');
+		self.context = self.canvas.getContext('2d');
+		self.context.mozImageSmoothingEnabled = false;
+		self.context.webkitImageSmoothingEnabled = false;
+		self.context.msImageSmoothingEnabled = false;
+		self.context.imageSmoothingEnabled = false;
+		self.font = null;
+		self.ticks = 0;
 
-		this.startTime = 0;
-		this.renderStartX = 0;
-		this.renderStartY = 0;
+		self.startTime = 0;
+		self.renderStartX = 0;
+		self.renderStartY = 0;
 
-		//self.canvas.width  = 1024; //window.innerWidth;
-		//self.canvas.height = 768; //window.innerHeight;
+		self.messages = [];
 
-		this.messages = [];
+		self.isReversed = false;
 
-		this.isReversed = false;
+		self.isMuted = false;
 
-		this.isMuted = false;
-
-		this.inputHandler = new InputHandler();
-		this.audioHandler = new AudioHandler();
-		this.prevState = null;
-		this.state = Game.STATE_INIT;
+		self.inputHandler = new InputHandler();
+		self.audioHandler = new AudioHandler();
+		self.prevState = null;
+		self.state = Game.STATE_INIT;
 
 
-		this.editAwaitingGemTarget = false;
-		this.editCurrentMapName = '';
-		this.loadMapError = false;
-		this.saveMapError = false;
-		this.editCurrentElement = ELEMENT_GRASS;
-		this.allEditElements = [
+		self.editAwaitingGemTarget = false;
+		self.editCurrentMapName = '';
+		self.loadSaveMapHint = false;
+		self.editCurrentElement = ELEMENT_GRASS;
+		self.allEditElements = [
 			ELEMENT_GRASS,
 			ELEMENT_STONE,
 			ELEMENT_BOMB,
@@ -814,217 +799,20 @@
 			ELEMENT_RUBY,
 			ELEMENT_LAVA,
 			ELEMENT_DOOR,
-			ELEMENT_WALL,
+			ELEMENT_WALL
 		];
 
-		this.elementGraphics = [];
+		self.elementGraphics = [];
 
-		this.sprite = new Sprite('sprites.png', function() {
+		self.sprite = new Sprite('sprites.png', function() {
 			self.changeState(Game.STATE_MENU);
 			self.font = new Font(self.sprite);
 
-			self.elementGraphics = {};
-			self.elementGraphics[ELEMENT_GRASS] = new Gfx(self.sprite, 16, 0, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE);
-			self.elementGraphics[ELEMENT_STONE] = new Gfx(self.sprite, 0, 0, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE);
-			self.elementGraphics[ELEMENT_BOMB] = new Gfx(self.sprite, 32, 0, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE);
-			self.elementGraphics[ELEMENT_EMERALD] = new Gfx(self.sprite, 0, 16, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE);
-			self.elementGraphics[ELEMENT_RUBY] = new Gfx(self.sprite, 0, 64, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE);
-			self.elementGraphics[ELEMENT_LAVA] = new Gfx(self.sprite, 48, 64, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE);
-			self.elementGraphics[ELEMENT_DOOR] = new Gfx(self.sprite, 32, 32, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE);
-			self.elementGraphics[ELEMENT_WALL] = new Gfx(self.sprite, 32, 80, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE);
+			self.initGraphics();
 		}); // load sprite
+		self.initAudio();
 
-
-
-		// Milliseconds per beat.
-		var loopSpeed = 250;
-		// Predefined loops. Saves duplication in the song.
-
-		// instruments have numbers 1 - ....
-		// loops have numbers 101 - ....
-		var DRUMLOOP = 101;
-		var loops = {};
-		loops[DRUMLOOP] = [
-			[],
-			[],
-			[INSTRUMENT_CYMBAL],
-			[]
-		];
-		// The song! Put instruments/loops in here.
-		var song = [
-			[DRUMLOOP, INSTRUMENT_WAVE],
-			[{n:INSTRUMENT_WAVE,p:1.06}],
-			[],
-			[{n:INSTRUMENT_WAVE,p:1.06}],
-			[DRUMLOOP, {n:INSTRUMENT_WAVE, p: 1}],
-			[],
-			[],
-			[{n:INSTRUMENT_WAVE,p:1.24}],
-			[DRUMLOOP],
-			[{n:INSTRUMENT_WAVE,p:1.3}],
-			[],
-			[],
-			[DRUMLOOP, INSTRUMENT_BASS],
-			[],
-			[],
-			[],
-			[DRUMLOOP, INSTRUMENT_BASS],
-			[],
-			[],
-			[],
-			[DRUMLOOP],
-			[{n:INSTRUMENT_WAVE,p:0.88}],
-			[{n:INSTRUMENT_WAVE,p:0.94}],
-			[],
-			[DRUMLOOP],
-			[{n:INSTRUMENT_WAVE,p:0.94}],
-			[{n:INSTRUMENT_WAVE,p:0.88}],
-			[],
-			[DRUMLOOP],
-			[],
-			[],
-			[],
-			[DRUMLOOP, INSTRUMENT_BASS],
-			[],
-			[],
-			[],
-			[DRUMLOOP, INSTRUMENT_BASS],
-			[],
-			[],
-			[],
-			[DRUMLOOP],
-			[],
-			[],
-			[]
-		];
-
-		// Fire up a sequencer with all of the above
-		this.audioHandler.addSequence(AUDIO_BG_MUSIC, new Sequencer({
-			loopSpeed: loopSpeed, // milliseconds per beat
-			instruments: INSTRUMENTS, // The Audio elements
-			loops: loops, // Loops
-			song: song, // The actual song
-			loop: true, // Loop over and over
-			buffer: 1.4 // seconds buffer. ~min Chrome lets us have in a background tab
-		}));
-
-		// emerald sound
-		this.audioHandler.add(AUDIO_EXPLOSION, 5,
-			[
-				[3,,0.131,0.5546,0.4945,0.1142,,,,,,,,,,0.6184,-0.1018,-0.1237,1,,,,,0.5]
-
-			]
-		);
-		// open door
-		this.audioHandler.add(AUDIO_OPENDOOR, 1,
-			[
-				[1,,0.2125,,0.4813,0.4889,,0.2423,,,,,,,,0.7641,,,1,,,,,0.4935]
-			]
-		);
-
-		// stone falls to the ground
-		this.audioHandler.add(AUDIO_STONE, 5,
-			[
-				[3,,0.1535,0.2135,0.0535,0.0535,,-0.2463,,,,,,,,,0.0328,-0.1877,0.8134,,,,,0.4935]
-			]
-		);
-
-		this.audioHandler.add(AUDIO_WALK, 1,
-			[
-				//[10, 0, 0.1, "sine", 0.2, 0, 0, 40, false, 0, 20,,]
-				[3,,0.1017,0.0535,0.0782,0.0735,,-0.536,,,,,,,,,,,1,,,0.0436,,0.2735],
-			]
-		);
-
-		this.audioHandler.add(AUDIO_REVERSE, 2,
-			[
-				[2,,0.175,,0.4147,0.3131,,0.2175,,,,,,,,0.7216,,,1,,,,,0.2735]
-			]
-		);
-
-		this.audioHandler.add(AUDIO_DEATH, 1,
-			[
-				//[3,0.0137,0.1196,0.0357,0.7666,0.5988,,-0.541,-0.0004,,,-0.7069,,-0.5796,-0.0053,0.8313,-0.1972,-0.7011,0.9901,0.3907,-0.1717,,0.5852,0.5]
-				//[3,0.1405,0.01,0.3854,0.9984,0.0726,,,0.005,,0.1376,0.7791,0.8835,0.8931,-0.0015,0.383,-0.1131,-0.3126,0.4644,0.6286,0.1435,,0.1538,0.5]
-				[3,,0.1943,0.6007,0.4404,0.5443,,-0.347,,,,,,,,0.3375,,,1,,,,,0.5]
-			]
-		);
-
-		//this.audioHandler.addSequence( 'deathsong', new Sequencer({
-		//	loopSpeed: 400,
-		//	instruments: {
-		//		c: jsfxr([1,,0.1417,,0.3735,0.1865,,,,,,,,,,,,,0.9934,0.2529,,0.1,,0.5]),
-		//		d: jsfxr([1,,0.1417,,0.3735,0.1935,,,,,,,,,,,,,0.9934,0.2529,,0.1,,0.5]),
-		//		e: jsfxr([1,,0.1417,,0.4065,0.2065,,,,,,,,,,,,,0.9934,0.2529,,0.1,,0.5]),
-		//		f: jsfxr([1,,0.1417,,0.4065,0.2165,,,,,,,,,,,,,0.9934,0.2529,,0.1,,0.5]),
-		//		g: jsfxr([1,,0.1417,,0.4065,0.2265,,,,,,,,,,,,,0.9934,0.2529,,0.1,,0.5]),
-		//		a: jsfxr([1,,0.1417,,0.4065,0.2365,,,,,,,,,,,,,0.9934,0.2529,,0.1,,0.5]),
-		//		h: jsfxr([1,,0.1417,,0.4065,0.2465,,,,,,,,,,,,,0.9934,0.2529,,0.1,,0.5]),
-		//		c2: jsfxr([1,,0.1417,,0.4065,0.2565,,,,,,,,,,,,,0.9934,0.2529,,0.1,,0.5]),
-		//		cymbal: this.audioHandler.instruments.cymbal,
-		//		//drum: jsfxr([1,,0.1787,,0.3095,0.17,,,,,,,,0.9934,0.2529,,0.1,,0.5]),
-		//		//drum: jsfxr([1,,0.1417,,0.4065,0.2565,,,,,,,,,,,,,0.9934,0.2529,,0.1,,0.5]),
-		//		bass: this.audioHandler.instruments.bass,
-		//		drum: this.audioHandler.instruments.drum,
-		//		wave: this.audioHandler.instruments.wave
-		//	},
-		//	loops: {
-		//		bestloop: [
-		//			['c'],
-		//			['d'],
-		//			['g'],
-		//			['f'],
-		//			['e'],
-		//			['a'],
-		//			[''],
-		//			['g']
-		//		],
-		//		otherloop: [
-		//			['drum'],
-		//			[],
-		//			[],
-		//			[]
-		//		]
-		//	},
-		//	song: [
-		//		['bestloop', 'otherloop'],
-		//		[],
-		//		[],
-		//		[],
-		//		['otherloop'],
-		//		[],
-		//		['wave'],
-		//		[],
-		//		['bestloop', 'otherloop'],
-		//		[],
-		//		[],
-		//		[],
-		//		['otherloop'],
-		//		[],
-		//		['wave'],
-		//		[],
-		//		['bestloop', 'otherloop'],
-		//		[],
-		//		['wave'],
-		//		[],
-		//		['otherloop'],
-		//		[],
-		//		['h', 'wave'],
-		//		[],
-		//		['bestloop', 'otherloop'],
-		//		[],
-		//		['wave'],
-		//		[],
-		//		['otherloop'],
-		//		[],
-		//		[],
-		//		[],
-		//	],
-		//	loop: true
-		//}));
-		//this.audioHandler.playSequence('deathsong');
-
-		this.lastUpdate = new Date().getTime();
+		self.lastUpdate = new Date().getTime();
 		var tick = function() {
 
 			self.ticks++;
@@ -1047,7 +835,9 @@
 				self.update();
 				self.render();
 
-			} else if ( self.state === Game.STATE_GAMEOVER || self.state === Game.STATE_WON ) {
+			} else if ( self.state === Game.STATE_GAMEOVER
+				|| self.state === Game.STATE_WON
+				) {
 				self.handleInput();
 			}
 
@@ -1067,12 +857,211 @@
 	Game.STATE_LOADMAP = 7;
 
 	Game[PROTO] = {
+		initAudio: function() {
+			var self = this;
+
+			// Predefined loops. Saves duplication in the song.
+
+			// instruments have numbers 1 - ....
+			// loops have numbers 101 - ....
+			var DRUMLOOP = 101;
+			var loops = {};
+			loops[DRUMLOOP] = [
+				[],
+				[],
+				[INSTRUMENT_CYMBAL],
+				[]
+			];
+			// The song! Put instruments/loops in here.
+			var song = [
+				[DRUMLOOP, INSTRUMENT_WAVE],
+				[{n:INSTRUMENT_WAVE,p:1.06}],
+				[],
+				[{n:INSTRUMENT_WAVE,p:1.06}],
+
+				[DRUMLOOP, {n:INSTRUMENT_WAVE, p: 1}],
+				[],
+				[],
+				[{n:INSTRUMENT_WAVE,p:1.24}],
+
+				[DRUMLOOP],
+				[{n:INSTRUMENT_WAVE,p:1.3}],
+				[],
+				[],
+
+				[DRUMLOOP, INSTRUMENT_BASS],
+				[],
+				[],
+				[],
+
+				[DRUMLOOP, INSTRUMENT_BASS],
+				[],
+				[],
+				[],
+
+				[DRUMLOOP],
+				[{n:INSTRUMENT_WAVE,p:0.88}],
+				[{n:INSTRUMENT_WAVE,p:0.94}],
+				[],
+
+				[DRUMLOOP],
+				[{n:INSTRUMENT_WAVE,p:0.94}],
+				[{n:INSTRUMENT_WAVE,p:0.88}],
+				[],
+
+				[DRUMLOOP],
+				[],
+				[],
+				[],
+
+				[DRUMLOOP, INSTRUMENT_BASS],
+				[],
+				[],
+				[],
+
+				[DRUMLOOP, INSTRUMENT_BASS],
+				[],
+				[],
+				[],
+
+				[DRUMLOOP],
+				[],
+				[],
+				[]
+			];
+
+			// Fire up a sequencer with all of the above
+			self.audioHandler.addSequence(AUDIO_BG_MUSIC, new Sequencer({
+				loopSpeed: 250, // milliseconds per beat
+				instruments: INSTRUMENTS, // The Audio elements
+				loops: loops, // Loops
+				song: song, // The actual song
+				loop: true, // Loop over and over
+				buffer: 1.4 // seconds buffer. ~min Chrome lets us have in a background tab
+			}));
+
+			// emerald sound
+			self.audioHandler.add(AUDIO_EXPLOSION, 5, [
+				[3,,0.131,0.5546,0.4945,0.1142,,,,,,,,,,0.6184,-0.1018,-0.1237,1,,,,,0.5]
+			]);
+			// open door
+			self.audioHandler.add(AUDIO_OPENDOOR, 1, [
+				[1,,0.2125,,0.4813,0.4889,,0.2423,,,,,,,,0.7641,,,1,,,,,0.4935]
+			]);
+
+			// stone falls to the ground
+			self.audioHandler.add(AUDIO_STONE, 5, [
+				[3,,0.1535,0.2135,0.0535,0.0535,,-0.2463,,,,,,,,,0.0328,-0.1877,0.8134,,,,,0.4935]
+			]);
+
+			self.audioHandler.add(AUDIO_WALK, 1, [
+				//[10, 0, 0.1, "sine", 0.2, 0, 0, 40, false, 0, 20,,]
+				[3,,0.1017,0.0535,0.0782,0.0735,,-0.536,,,,,,,,,,,1,,,0.0436,,0.2735],
+			]);
+
+			self.audioHandler.add(AUDIO_REVERSE, 2, [
+				[2,,0.175,,0.4147,0.3131,,0.2175,,,,,,,,0.7216,,,1,,,,,0.2735]
+			]);
+
+			self.audioHandler.add(AUDIO_DEATH, 1, [
+				//[3,0.0137,0.1196,0.0357,0.7666,0.5988,,-0.541,-0.0004,,,-0.7069,,-0.5796,-0.0053,0.8313,-0.1972,-0.7011,0.9901,0.3907,-0.1717,,0.5852,0.5]
+				//[3,0.1405,0.01,0.3854,0.9984,0.0726,,,0.005,,0.1376,0.7791,0.8835,0.8931,-0.0015,0.383,-0.1131,-0.3126,0.4644,0.6286,0.1435,,0.1538,0.5]
+				[3,,0.1943,0.6007,0.4404,0.5443,,-0.347,,,,,,,,0.3375,,,1,,,,,0.5]
+			]);
+
+			//self.audioHandler.addSequence( 'deathsong', new Sequencer({
+			//	loopSpeed: 400,
+			//	instruments: {
+			//		c: jsfxr([1,,0.1417,,0.3735,0.1865,,,,,,,,,,,,,0.9934,0.2529,,0.1,,0.5]),
+			//		d: jsfxr([1,,0.1417,,0.3735,0.1935,,,,,,,,,,,,,0.9934,0.2529,,0.1,,0.5]),
+			//		e: jsfxr([1,,0.1417,,0.4065,0.2065,,,,,,,,,,,,,0.9934,0.2529,,0.1,,0.5]),
+			//		f: jsfxr([1,,0.1417,,0.4065,0.2165,,,,,,,,,,,,,0.9934,0.2529,,0.1,,0.5]),
+			//		g: jsfxr([1,,0.1417,,0.4065,0.2265,,,,,,,,,,,,,0.9934,0.2529,,0.1,,0.5]),
+			//		a: jsfxr([1,,0.1417,,0.4065,0.2365,,,,,,,,,,,,,0.9934,0.2529,,0.1,,0.5]),
+			//		h: jsfxr([1,,0.1417,,0.4065,0.2465,,,,,,,,,,,,,0.9934,0.2529,,0.1,,0.5]),
+			//		c2: jsfxr([1,,0.1417,,0.4065,0.2565,,,,,,,,,,,,,0.9934,0.2529,,0.1,,0.5]),
+			//		cymbal: self.audioHandler.instruments.cymbal,
+			//		//drum: jsfxr([1,,0.1787,,0.3095,0.17,,,,,,,,0.9934,0.2529,,0.1,,0.5]),
+			//		//drum: jsfxr([1,,0.1417,,0.4065,0.2565,,,,,,,,,,,,,0.9934,0.2529,,0.1,,0.5]),
+			//		bass: self.audioHandler.instruments.bass,
+			//		drum: self.audioHandler.instruments.drum,
+			//		wave: self.audioHandler.instruments.wave
+			//	},
+			//	loops: {
+			//		bestloop: [
+			//			['c'],
+			//			['d'],
+			//			['g'],
+			//			['f'],
+			//			['e'],
+			//			['a'],
+			//			[''],
+			//			['g']
+			//		],
+			//		otherloop: [
+			//			['drum'],
+			//			[],
+			//			[],
+			//			[]
+			//		]
+			//	},
+			//	song: [
+			//		['bestloop', 'otherloop'],
+			//		[],
+			//		[],
+			//		[],
+			//		['otherloop'],
+			//		[],
+			//		['wave'],
+			//		[],
+			//		['bestloop', 'otherloop'],
+			//		[],
+			//		[],
+			//		[],
+			//		['otherloop'],
+			//		[],
+			//		['wave'],
+			//		[],
+			//		['bestloop', 'otherloop'],
+			//		[],
+			//		['wave'],
+			//		[],
+			//		['otherloop'],
+			//		[],
+			//		['h', 'wave'],
+			//		[],
+			//		['bestloop', 'otherloop'],
+			//		[],
+			//		['wave'],
+			//		[],
+			//		['otherloop'],
+			//		[],
+			//		[],
+			//		[],
+			//	],
+			//	loop: true
+			//}));
+			//self.audioHandler.playSequence('deathsong');
+		},
+		initGraphics: function() {
+			var self = this;
+			self.elementGraphics = {};
+			self.elementGraphics[ELEMENT_GRASS] = new Gfx(self.sprite, 16, 0, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE);
+			self.elementGraphics[ELEMENT_STONE] = new Gfx(self.sprite, 0, 0, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE);
+			self.elementGraphics[ELEMENT_BOMB] = new Gfx(self.sprite, 32, 0, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE);
+			self.elementGraphics[ELEMENT_EMERALD] = new Gfx(self.sprite, 0, 16, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE);
+			self.elementGraphics[ELEMENT_RUBY] = new Gfx(self.sprite, 0, 64, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE);
+			self.elementGraphics[ELEMENT_LAVA] = new Gfx(self.sprite, 48, 64, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE);
+			self.elementGraphics[ELEMENT_DOOR] = new Gfx(self.sprite, 32, 32, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE);
+			self.elementGraphics[ELEMENT_WALL] = new Gfx(self.sprite, 32, 80, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE);
+		},
 		changeState: function( toState ) {
-			this.prevState = this.state;
-			this.state = toState;
+			var self = this;
+			self.prevState = self.state;
+			self.state = toState;
 
 			// reset input handler to stop taking key presses/downs to another state
-			this.inputHandler.reset();
+			self.inputHandler.reset();
 		},
 		randomMap: function() {
 
@@ -1086,32 +1075,30 @@
 				playerY: 0
 			};
 
-			for ( var i = 0; i < MAP_SIZE_Y*MAP_SIZE_X; i++ ) {
+			obj.map.push(ELEMENT_GRASS);
+			for ( var i = 1; i < MAP_SIZE_Y*MAP_SIZE_X; i++ ) {
 				// grass at player pos
-				if ( i === 0 ) {
-					obj.map.push(G);
+				var rnd = Math.random();
+				if ( rnd > 0.99 ) {
+					obj.map.push(ELEMENT_RUBY);
+				} else if ( rnd > 0.97 ) {
+					obj.map.push(ELEMENT_NULL);
+				} else if ( rnd > 0.9 ) {
+					obj.map.push(ELEMENT_BOMB);
+				} else if ( rnd > 0.8 ) {
+					obj.map.push(ELEMENT_EMERALD);
+				} else if ( rnd > 0.7 ) {
+					obj.map.push(ELEMENT_STONE);
+				} else if ( rnd > 0.35 ) {
+					obj.map.push(ELEMENT_GRASS);
 				} else {
-					if ( rnd > 0.99 ) {
-						obj.map.push(R);
-					} else if ( rnd > 0.97 ) {
-						obj.map.push(X);
-					} else if ( rnd > 0.9 ) {
-						obj.map.push(B);
-					} else if ( rnd > 0.8 ) {
-						obj.map.push(E);
-					} else if ( rnd > 0.7 ) {
-						obj.map.push(S);
-					} else if ( rnd > 0.35 ) {
-						obj.map.push(G);
-					} else {
-						obj.map.push(L);
-					}
+					obj.map.push(ELEMENT_LAVA);
 				}
 			}
 
 			// generate a door at a random position
-			var rand = Rnd()*(MAP_SIZE_X*MAP_SIZE_Y) | 0;
-			obj.map[rand] = D;
+			var rand = Math.random()*MAP_SIZE_X*MAP_SIZE_Y | 0;
+			obj.map[rand] = ELEMENT_DOOR;
 
 			this.readMap(obj);
 
@@ -1119,116 +1106,52 @@
 
 		},
 		readMap: function(obj) {
+			var self = this;
+			self.elements = [];
+			self.rElements = [];
+			self.gemCount = 0;
 
-			var map = obj.map;
-			var playerX = obj.playerX;
-			var playerY = obj.playerY;
-			var gemTarget = obj.gemTarget;
+			obj.map.forEach(function(item, i) {
+				self.elements.push(null);
+				self.rElements.push(null);
+				self.setElementAtIndexByCode(i, obj.map[i]);
+			});
 
-			this.elements = [];
-			this.rElements = [];
-			this.gemCount = 0;
-
-
-			var i = 0;
-			for ( i = 0; i < map.length; i++ ) {
-				this.elements.push(null);
-				this.rElements.push(null);
-			}
-			var x, y;
-			for ( i = 0; i < map.length; i++ ) {
-				x = (i%MAP_SIZE_X) * TILE_SIZE;
-				y = parseInt(i/MAP_SIZE_X, 10) * TILE_SIZE;
-				switch ( map[i] ) {
-					case G:
-						this.setElementAtIndex(i, new Grass(this, x, y));
-						break;
-					case L:
-						this.setElementAtIndex(i, new Lava(this, x, y));
-						break;
-					case B:
-						this.setElementAtIndex(i, new Bomb(this, x, y));
-						break;
-					case S:
-						this.setElementAtIndex(i, new Stone(this, x, y));
-						break;
-					case E:
-						this.setElementAtIndex(i, new Emerald(this, x, y));
-						break;
-					case R:
-						this.setElementAtIndex(i, new Ruby(this, x, y));
-						break;
-					case D:
-						this.setElementAtIndex(i, new Door(this, x, y));
-						break;
-					case W:
-						this.setElementAtIndex(i, new Wall(this, x, y));
-						break;
-					default: break;
-				}
-			}
-			this.gemTarget = gemTarget || this.gemCount;
-			this.player = new Player(this, playerX*TILE_SIZE, playerY*TILE_SIZE);
+			self.gemTarget = obj.gemTarget || self.gemCount;
+			self.player = new Player(self, obj.playerX*TILE_SIZE, obj.playerY*TILE_SIZE);
 		},
 		loadMap: function(mapName) {
-			//TODO: check if localStorage can be used.
-			var obj = localStorage.getItem('map-'+mapName.toLowerCase());
-			if ( !obj ) {
-				return false;
-			}
 			try {
-				obj = JSON.parse(obj);
+				//TODO: maybe check if localStorage can be used.
+				return JSON.parse(localStorage.getItem('map-'+mapName.toLowerCase()));
 			} catch( e ) {
 				return false;
 			}
 
-			if ( !obj ) {
-				return false;
-			}
-			return obj;
-
 		},
 		saveMap: function( mapName ) {
-
-			var map = [];
-			this.elements.forEach(function( el ) {
-				if ( el === null ) {
-					map.push(X);
-				} else if ( el instanceof Lava ) {
-					map.push(L);
-				} else if ( el instanceof Grass ) {
-					map.push(G);
-				} else if ( el instanceof Bomb ) {
-					map.push(B);
-				} else if ( el instanceof Stone ) {
-					map.push(S);
-				} else if ( el instanceof Ruby ) {
-					map.push(R)
-				} else if ( el instanceof Emerald ) {
-					map.push(E);
-				} else if ( el instanceof Explosion ) {
-					// dont save to map
-				} else if ( el instanceof Door ) {
-					map.push(D);
-				} else if ( el instanceof Wall ) {
-					map.push(W);
-				}
-			});
 			var self = this;
 			var pos = self.player.getActualPosition();
-			var obj = {
-				map: map,
+			//TODO: check if localStorage can be used.
+			localStorage.setItem('map-'+mapName.toLowerCase(), JSON.stringify({
+				// note: elements.map = function. not a map of self game
+				map: self.elements.map(self.elementToElementCode),
 				gemTarget: self.gemTarget,
 				playerX: pos.x,
 				playerY: pos.y
-			};
-			//TODO: check if localStorage can be used.
-			localStorage.setItem('map-'+mapName.toLowerCase(), JSON.stringify(obj));
+			}));
 			return true;
 		},
+		setElementAtIndexByCode: function(idx, elCode) {
+			this.setElementAtIndex(
+				idx,
+				this.elementCodeToElement(elCode, (idx%MAP_SIZE_X) * TILE_SIZE, parseInt(idx/MAP_SIZE_X, 10) * TILE_SIZE)
+			);
+		},
 		setElementAtIndex: function(idx, el) {
+			var self = this;
 
-			if ( this.elements.length <= idx || idx < 0 ) {
+			if ( self.elements.length <= idx || idx < 0 ) {
 				return;
 			}
 
@@ -1239,61 +1162,60 @@
 			if ( el === null ) {
 				rel = null;
 			} else if ( el instanceof Lava ) {
-				rel = new Grass(this, posX, posY);
+				rel = new Grass(self, posX, posY);
 			} else if ( el instanceof Grass ) {
-				rel = new Lava(this, posX, posY);
+				rel = new Lava(self, posX, posY);
 			} else if ( el instanceof Bomb ) {
-				rel = new Ruby(this, posX, posY);
+				rel = new Ruby(self, posX, posY);
 			} else if ( el instanceof Stone ) {
-				rel = new Emerald(this, posX, posY);
+				rel = new Emerald(self, posX, posY);
 			} else if ( el instanceof Ruby ) {
-				rel = new Bomb(this, posX, posY);
+				rel = new Bomb(self, posX, posY);
 			} else if ( el instanceof Emerald ) {
-				rel = new Stone(this, posX, posY);
+				rel = new Stone(self, posX, posY);
 			} else if ( el instanceof Explosion ) {
-				rel = new Explosion(this, posX, posY); // explosion are explosion
+				rel = new Explosion(self, posX, posY); // explosion are explosion
 			} else if ( el instanceof Door ) {
-				rel = new Door(this, posX, posY); // door are door
+				rel = new Door(self, posX, posY); // door are door
 			} else if ( el instanceof Wall ) {
-				rel = new Wall(this, posX, posY); // door are door
+				rel = new Wall(self, posX, posY); // door are door
 			}
 
-			if ( this.isReversed ) {
-				this.elements[idx] = rel;
-				this.rElements[idx] = el;
+			if ( self.isReversed ) {
+				self.elements[idx] = rel;
+				self.rElements[idx] = el;
 			} else {
-				this.elements[idx] = el;
-				this.rElements[idx] = rel;
+				self.elements[idx] = el;
+				self.rElements[idx] = rel;
 			}
 		},
 		deleteElementAtIndex: function(idx) {
 
-			if ( this.elements.length <= idx || idx < 0 ) {
+			var self = this;
+			if ( self.elements.length <= idx || idx < 0 ) {
 				return;
 			}
 
-			var el = this.elements[idx];
+			var el = self.elements[idx];
 			// remove all dummies
-			this.elements.forEach(function(item, i) {
+			self.elements.forEach(function(item, i) {
 				if ( item instanceof Dummy && item.ref === el ) {
-					delete this.elements[i];
-					this.setElementAtIndex(i, null);
+					delete self.elements[i];
+					self.setElementAtIndex(i, null);
 				}
-			}, this);
-			var rEl = this.rElements[idx];
+			});
+			var rEl = self.rElements[idx];
 			// remove all dummies
-			this.rElements.forEach(function(item, i) {
+			self.rElements.forEach(function(item, i) {
 				if ( item instanceof Dummy && item.ref === rEl ) {
-					delete this.rElements[i];
-					var posX = (i%MAP_SIZE_X) * TILE_SIZE;
-					var posY = parseInt(i/MAP_SIZE_X, 10) * TILE_SIZE;
-					this.setElementAtIndex(i, new Grass(this, posX, posY));
+					delete self.rElements[i];
+					self.setElementAtIndex(i, null);
 				}
-			}, this);
+			});
 
-			delete this.elements[idx];
+			delete self.elements[idx];
 			//delete this.rElements[idx];
-			this.setElementAtIndex(idx, null);
+			self.setElementAtIndex(idx, null);
 		},
 		getElementAtPos: function(x, y) {
 
@@ -1311,14 +1233,10 @@
 		calcGemTarget: function( ) {
 			var gemTarget = 0;
 			this.elements.forEach(function(item) {
-				if ( item instanceof Gem ) {
-					gemTarget += item.value;
-				}
+				gemTarget += item && item.value ? item.value : 0;
 			});
 			this.rElements.forEach(function(item) {
-				if ( item instanceof Gem ) {
-					gemTarget += item.value;
-				}
+				gemTarget += item && item.value ? item.value : 0;
 			});
 			return gemTarget;
 		},
@@ -1345,23 +1263,52 @@
 
 		},
 
-		createElement: function( elementCode, x, y ) {
+		elementToElementCode: function( element ) {
+			if ( element === null ) {
+				return ELEMENT_NULL;
+			} else if ( element instanceof Grass ) {
+				return ELEMENT_GRASS;
+			} else if ( element instanceof Stone) {
+				return ELEMENT_STONE;
+			} else if ( element instanceof Emerald ) {
+				return ELEMENT_EMERALD;
+			} else if ( element instanceof Ruby ) {
+				return ELEMENT_RUBY;
+			} else if ( element instanceof Lava ) {
+				return ELEMENT_LAVA;
+			} else if ( element instanceof Wall ) {
+				return ELEMENT_WALL;
+			} else if ( element instanceof Bomb ) {
+				return ELEMENT_BOMB;
+			} else if ( element instanceof Door ) {
+				return ELEMENT_DOOR;
+			} else if ( element instanceof Explosion ) {
+				return ELEMENT_EXPLOSION;
+			}
+			return ELEMENT_NULL;
+		},
+		elementCodeToElement: function( elementCode, x, y ) {
+			var self = this;
 			var ret = null;
 			switch ( elementCode ) {
-				case ELEMENT_GRASS: ret = new Grass(this, x, y); break;
-				case ELEMENT_STONE: ret = new Stone(this, x, y); break;
-				case ELEMENT_BOMB: ret = new Bomb(this, x, y); break;
-				case ELEMENT_EMERALD: ret = new Emerald(this, x, y); break;
-				case ELEMENT_RUBY: ret = new Ruby(this, x, y); break;
-				case ELEMENT_LAVA: ret = new Lava(this, x, y); break;
-				case ELEMENT_DOOR: ret = new Door(this, x, y); break;
-				case ELEMENT_WALL: ret = new Wall(this, x, y); break;
+				case ELEMENT_GRASS: ret = new Grass(self, x, y); break;
+				case ELEMENT_STONE: ret = new Stone(self, x, y); break;
+				case ELEMENT_BOMB: ret = new Bomb(self, x, y); break;
+				case ELEMENT_EMERALD: ret = new Emerald(self, x, y); break;
+				case ELEMENT_RUBY: ret = new Ruby(self, x, y); break;
+				case ELEMENT_LAVA: ret = new Lava(self, x, y); break;
+				case ELEMENT_DOOR: ret = new Door(self, x, y); break;
+				case ELEMENT_WALL: ret = new Wall(self, x, y); break;
+				case ELEMENT_EXPLOSION: ret = new Explosion(self, x, y); break;
+				case ELEMENT_NULL:
+				default: ret = null; break;
 			}
 			return ret;
 		},
 
 		drawBackground: function() {
 			var self = this;
+			var i;
 			self.context.fillStyle = '#000';
 			self.context.fillRect(0,0, self.canvas.width, self.canvas.height);
 
@@ -1370,7 +1317,7 @@
 				// draw grid lines
 				self.context.strokeStyle = '#555';
 				// draw with offset of the player!
-				for ( var i = TILE_SIZE-self.renderStartX; i < self.canvas.width+self.renderStartX; i+=TILE_SIZE ) {
+				for ( i = TILE_SIZE-self.renderStartX; i < self.canvas.width+self.renderStartX; i+=TILE_SIZE ) {
 					self.context.beginPath();
 					self.context.moveTo(i, 0);
 					self.context.lineTo(i, self.canvas.height);
@@ -1378,7 +1325,7 @@
 					self.context.closePath();
 				}
 
-				for ( var i = TILE_SIZE-self.renderStartY; i < self.canvas.height+self.renderStartY; i+=TILE_SIZE ) {
+				for ( i = TILE_SIZE-self.renderStartY; i < self.canvas.height+self.renderStartY; i+=TILE_SIZE ) {
 					self.context.beginPath();
 					self.context.moveTo(0, i);
 					self.context.lineTo(self.canvas.width, i);
@@ -1391,8 +1338,7 @@
 
 			self.inputHandler.tick();
 
-			var i, j;
-
+			var i;
 
 			if ( self.state === Game.STATE_MENU ) {
 				if ( self.inputHandler.isPressed(VK_E) ) {
@@ -1462,7 +1408,7 @@
 							self.changeState(Game.STATE_EDIT);
 							self.messages.push(new Message(self, STR_SAVED_AS_SPACE+'"'+self.editCurrentMapName+'"...', 150));
 						} else {
-							self.saveMapError = STR_ERROR_UNABLE_TO_SAVE_MAP;
+							self.loadSaveMapHint = STR_ERROR_UNABLE_TO_SAVE_MAP;
 						}
 					}
 				}
@@ -1470,7 +1416,7 @@
 				for ( i = 48; i <= 90; i++ ) {
 					if ( self.inputHandler.isPressed(i) ) {
 						self.editCurrentMapName+=String.fromCharCode(i);
-						self.saveMapError = false;
+						self.loadSaveMapHint = false;
 					}
 				}
 				if ( self.inputHandler.isPressed(VK_BACKSPACE) ) {
@@ -1478,7 +1424,7 @@
 						self.editCurrentMapName = self.editCurrentMapName.substring(0, self.editCurrentMapName.length-1);
 					}
 					if ( self.editCurrentMapName.length === 0 ) {
-						self.saveMapError = STR_HINT_PLEASE_ENTER_NAME;
+						self.loadSaveMapHint = STR_HINT_PLEASE_ENTER_NAME;
 					}
 				}
 
@@ -1494,22 +1440,12 @@
 				if ( self.inputHandler.isPressed(VK_O) ) {
 					/// fill the whole map with the current element type
 
-					this.elements = [];
-					this.rElements = [];
-					for ( var i = 0; i < MAP_SIZE_Y*MAP_SIZE_X; i++ ) {
-						this.elements.push(null);
-						this.rElements.push(null);
-					}
-
-					var index = 0;
-					var x, y;
-					for ( j = 0; j < MAP_SIZE_Y; j++ ) {
-						for ( i = 0; i < MAP_SIZE_X; i++ ) {
-							x = i*TILE_SIZE;
-							y = j*TILE_SIZE;
-							self.setElementAtIndex(index, self.createElement(self.editCurrentElement, x, y));
-							index++;
-						}
+					self.elements = [];
+					self.rElements = [];
+					for ( i = 0; i < MAP_SIZE_Y*MAP_SIZE_X; i++ ) {
+						self.elements.push(null);
+						self.rElements.push(null);
+						self.setElementAtIndexByCode(i, self.editCurrentElement);
 					}
 
 				}
@@ -1517,11 +1453,11 @@
 				if ( self.inputHandler.isPressed(VK_P) ) {
 					/// fill the whole map with the current element type
 
-					this.elements = [];
-					this.rElements = [];
-					for ( var i = 0; i < MAP_SIZE_Y*MAP_SIZE_X; i++ ) {
-						this.elements.push(null);
-						this.rElements.push(null);
+					self.elements = [];
+					self.rElements = [];
+					for ( i = 0; i < MAP_SIZE_Y*MAP_SIZE_X; i++ ) {
+						self.elements.push(null);
+						self.rElements.push(null);
 					}
 				}
 
@@ -1556,7 +1492,7 @@
 
 				if ( self.inputHandler.isDown(VK_E) ) {
 					var pos = self.player.getActualPosition();
-					self.setElementAtIndex(pos.y*MAP_SIZE_X+pos.x, self.createElement(self.editCurrentElement, pos.x*TILE_SIZE, pos.y*TILE_SIZE));
+					self.setElementAtIndexByCode(pos.y*MAP_SIZE_X+pos.x, self.editCurrentElement);
 				}
 
 				if ( self.inputHandler.isDown(VK_X) ) {
@@ -1687,16 +1623,17 @@
 			}
 
 			// add explosion entity at the place
-			self.setElementAtIndex(y*MAP_SIZE_X+x, new Explosion(self, x*TILE_SIZE, y*TILE_SIZE));
+			self.setElementAtIndexByCode(y*MAP_SIZE_X+x, ELEMENT_EXPLOSION);
 
 		},
 
+		// the x and y given to this function are coordinates, not real x y positions
 		createExplosion: function(px, py) {
 
 			var self = this;
 
 			// set desired place to explosion
-			self.setElementAtIndex(py*MAP_SIZE_X+px, new Explosion(self, px*TILE_SIZE, py*TILE_SIZE));
+			self.setElementAtIndexByCode(py*MAP_SIZE_X+px, ELEMENT_EXPLOSION);
 
 
 			// set surrounding places to explosions (maybe)
@@ -1735,7 +1672,7 @@
 					// when player is on the door, he won the game! :p
 					var elAtPlayerPos = self.getElementAtPos(playerPosBefore.x, playerPosBefore.y);
 					//console.log('Current pos: '+ playerPosBefore.x+'/'+playerPosBefore.y);
-					if ( elAtPlayerPos instanceof Door ) {
+					if ( elAtPlayerPos instanceof Door && elAtPlayerPos.isOpen ) {
 						// won
 						self.changeState(Game.STATE_WON);
 						self.player.dirX = 0;
@@ -2153,11 +2090,10 @@
 			self.font.renderText(self.context, STR_SAVE_MAP, 50, y);
 			y+=FONT_SIZE+HALF_FONT_SIZE;
 			self.font.renderText(self.context, STR_NAME_COLON+self.editCurrentMapName, 50, y);
-			if ( self.saveMapError ) {
-				console.log(self.saveMapError);
+			if ( self.loadSaveMapHint ) {
 				y+=FONT_SIZE+HALF_FONT_SIZE;
 				y+=FONT_SIZE+HALF_FONT_SIZE;
-				self.font.renderText(self.context, STR_HINT_COLON+self.saveMapError, 50, y);
+				self.font.renderText(self.context, STR_HINT_COLON+self.loadSaveMapHint, 50, y);
 			}
 		},
 		drawLoad: function() {
@@ -2166,11 +2102,10 @@
 			self.font.renderText(self.context, STR_LOAD_MAP, 50, y);
 			y+=FONT_SIZE+HALF_FONT_SIZE;
 			self.font.renderText(self.context, STR_NAME_COLON+self.editCurrentMapName, 50, y);
-			if ( self.loadMapError ) {
-				console.log(self.loadMapError);
+			if ( self.loadSaveMapHint ) {
 				y+=FONT_SIZE+HALF_FONT_SIZE;
 				y+=FONT_SIZE+HALF_FONT_SIZE;
-				self.font.renderText(self.context, STR_HINT_COLON+self.loadMapError, 50, y);
+				self.font.renderText(self.context, STR_HINT_COLON+self.loadSaveMapHint, 50, y);
 			}
 		},
 
@@ -2178,67 +2113,63 @@
 			var self = this;
 			self.drawBackground();
 			if ( self.state === Game.STATE_MENU ) {
-
 				self.drawMenu();
-
 			} else if ( self.state === Game.STATE_LOADMAP ) {
-
 				self.drawLoad();
 			} else if ( self.state === Game.STATE_SAVEMAP ) {
 				self.drawSave();
-
 			} else {
 				// render everything
 				self.drawElements();
 				self.drawHud();
 				self.player.render(self.context);
-
 			}
 		},
 
 		start: function( mapObj ) {
+			var self = this;
 
-			this.startTime = new Date().getTime();
+			self.startTime = new Date().getTime();
 
-			this.messages = [];
-			//this.messages.push(new Message(this, 'Welcome..', 300));
-			//this.messages.push(new Message(this, '...to the jungle..', 300));
+			self.messages = [];
+			//self.messages.push(new Message(this, 'Welcome..', 300));
+			//self.messages.push(new Message(this, '...to the jungle..', 300));
 
-			this.audioHandler.stopSequence(AUDIO_BG_MUSIC);
-			this.audioHandler.playSequence(AUDIO_BG_MUSIC);
+			self.audioHandler.stopSequence(AUDIO_BG_MUSIC);
+			self.audioHandler.playSequence(AUDIO_BG_MUSIC);
 
 			if ( mapObj ) {
-				this.readMap(mapObj);
+				self.readMap(mapObj);
 			} else {
-				this.randomMap();
+				self.randomMap();
 			}
-			this.changeState(Game.STATE_GAME);
+			self.changeState(Game.STATE_GAME);
 		},
 
 		startEdit: function( map ) {
+			var self = this;
+			self.startTime = new Date().getTime();
 
-			this.startTime = new Date().getTime();
-
-			this.audioHandler.stopSequence(AUDIO_BG_MUSIC);
-			this.audioHandler.playSequence(AUDIO_BG_MUSIC);
+			self.audioHandler.stopSequence(AUDIO_BG_MUSIC);
+			self.audioHandler.playSequence(AUDIO_BG_MUSIC);
 
 			if ( map ) {
-				this.readMap(map);
+				self.readMap(map);
 			} else {
-				this.elements = [];
-				this.rElements = [];
-				this.gemCount = 0;
-				this.gemTarget = 0;
+				self.elements = [];
+				self.rElements = [];
+				self.gemCount = 0;
+				self.gemTarget = 0;
 				for ( var i = 0; i < MAP_SIZE_Y*MAP_SIZE_X; i++ ) {
-					this.elements.push(null);
-					this.rElements.push(null);
+					self.elements.push(null);
+					self.rElements.push(null);
 				}
-				this.player = new Player(this, 0, 0);
+				self.player = new Player(self, 0, 0);
 			}
 
 
-			this.editCurrentElement = ELEMENT_GRASS;
-			this.changeState(Game.STATE_EDIT);
+			self.editCurrentElement = ELEMENT_GRASS;
+			self.changeState(Game.STATE_EDIT);
 
 		},
 		reset: function() {
