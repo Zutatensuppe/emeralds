@@ -78,6 +78,8 @@
 	var ELEMENT_NULL = 8;
 	var ELEMENT_EXPLOSION = 9;
 
+	var ENEMY_STRIDER = 10;
+
 
 	/////////////////////////////////////////////////////////////////
 	// Strings used in the game
@@ -433,7 +435,6 @@
 
 			// get one of the sounds for the specified key randomly
 			var rand = sound.length > 1 ? ((Math.random()*sound.length) | 0) : 0;
-			//console.log('playing sound "'+key+'", variant '+rand);
 			var soundData = sound[rand];
 
 			// play the sound
@@ -518,7 +519,6 @@
 		self.gfxLeft = [new Gfx(g.sprite, 0, 32, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE), new Gfx(g.sprite, 0, 48, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE)];
 		self.gfxDown = [new Gfx(g.sprite, 16, 48, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE), new Gfx(g.sprite, 16, 64, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE)];
 		self.gfxUp = [new Gfx(g.sprite, 0, 80, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE), new Gfx(g.sprite, 16, 80, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE)];
-
 	}
 	Player[PROTO] = Object.create(Entity[PROTO]);
 	Player[PROTO][CONSTRUCTOR] = Player;
@@ -548,10 +548,140 @@
 
 	/* Enemy
 	===============================================================*/
-	function Enemy(gfx){
+	function Enemy(g, gfx, x, y, w, h) {
+		var self = this;
+		Entity[PROTO][CONSTRUCTOR].call(self, g, gfx, x, y, w, h);
+		this.isDeadly = true;
 	}
 	Enemy[PROTO] = Object.create(Entity[PROTO]);
 	Enemy[PROTO][CONSTRUCTOR] = Enemy;
+	Enemy[PROTO].render = function(context) {
+		var self = this;
+		var screenX = self.x - self.game.renderStartX;
+		var screenY = self.y - self.game.renderStartY;
+		self.gfx.render(context, screenX, screenY);
+	};
+
+	/* Strider
+	 ===============================================================*/
+	function Strider(g, x, y) {
+		var self = this;
+		Enemy[PROTO][CONSTRUCTOR].call(self, g, g.elementGraphics[ENEMY_STRIDER], x, y, TILE_SIZE, TILE_SIZE);
+		self.speed = OBJECT_SPEED;
+		self.stepsPerTile = TILE_SIZE/self.speed;
+		self.substep = 0; // max TILE_SIZE/this.speed
+		self.gemCount = 0;
+		self.ticktick = 0;
+	}
+	Strider[PROTO] = Object.create(Enemy[PROTO]);
+	Strider[PROTO][CONSTRUCTOR] = Strider;
+	Strider[PROTO].update = function() {
+
+		var self = this;
+		if ( self.ticktick > 0 ) {
+			self.ticktick--;
+			return;
+		}
+		if ( self.dirX < 0 ) {
+			self.dirY = 0;
+			// check if a not null tile is left of this
+
+		} else if ( self.dirX > 0 ) {
+			self.dirY = 0;
+		} else if ( self.dirY < 0 ) {
+			self.dirX = 0;
+		} else if ( self.dirY > 0 ) {
+			self.dirX = 0;
+		}
+
+		if ( self.dirX === 0 && self.dirY === 0 ) {
+			var x = Math.random();
+			if ( x < 0.25 ) {
+				self.dirX = 1;
+			} else if ( x < 0.5 ) {
+				self.dirX = -1;
+			} else if ( x < 0.75 ) {
+				self.dirY = 1;
+			} else {
+				self.dirY = -1;
+			}
+		}
+
+		var posBefore = self.getActualPosition();
+
+		if ( self.dirX !== 0 || self.dirY !== 0 ) {
+
+			self.move();
+
+			// player moves each field in 8 steps
+			self.substep = self.substep < self.stepsPerTile-1 ? self.substep+1 : 0;
+
+		}
+
+		// check if must unmove
+
+		var unmove = false;
+		if ( self.substep === 1 ) {
+
+			// player started moving. lets see if he hits the bounds of the map, if yes, then unmove and set substep to 0;
+			if ( ( self.x <= 0 && self.dirX < 0 )
+				|| ( self.x >= MAP_SIZE_X*TILE_SIZE-TILE_SIZE && self.dirX > 0 )
+				|| ( self.y <= 0 && self.dirY < 0 )
+				|| ( self.y >= MAP_SIZE_Y*TILE_SIZE-TILE_SIZE && self.dirY > 0 )
+			) {
+				unmove = true;
+			} else if ( self.dirX !== 0 ) {
+
+				if ( self.game.state === Game.STATE_GAME ) {
+					// check left right elements if player can move there
+					// moving horizontally
+					var nextEl= self.game.getElementAtPos(posBefore.x+self.dirX, posBefore.y);
+
+					// do we have to unmove the player?
+					if ( typeof nextEl === UNDEF ) {
+						unmove = true;
+					} else if ( nextEl === null ) {
+						// ok
+					} else {
+						unmove = true;
+					}
+				}
+			} else if ( self.dirY !== 0 ) {
+				if ( self.game.state === Game.STATE_GAME ) {
+					// check top/bottom elements
+					// moving vertically
+
+					var nextEl= self.game.getElementAtPos(posBefore.x, posBefore.y+self.dirY);
+
+					// do we have to unmove the player?
+					if ( typeof nextEl === UNDEF ) {
+						unmove = true;
+					} else if ( nextEl === null ) {
+						// ok
+					} else {
+						unmove = true;
+					}
+				}
+			}
+
+		}
+
+		if ( unmove ) {
+			// just dont move..
+			self.unmove();
+			self.substep = 0;
+
+			// this also means the unit hit some kind of obstacle..
+			// stop moving and stay there for some ticks:
+			self.ticktick = 10;
+			self.dirX = 0;
+			self.dirY = 0;
+
+		}
+
+	};
+
+
 
 	/* Stone
 	===============================================================*/
@@ -778,8 +908,9 @@
 		self.messages = [];
 
 		self.isReversed = false;
-
 		self.isMuted = false;
+
+		self.enemies = [];
 
 		self.inputHandler = new InputHandler();
 		self.audioHandler = new AudioHandler();
@@ -799,7 +930,8 @@
 			ELEMENT_RUBY,
 			ELEMENT_LAVA,
 			ELEMENT_DOOR,
-			ELEMENT_WALL
+			ELEMENT_WALL,
+			ENEMY_STRIDER
 		];
 
 		self.elementGraphics = [];
@@ -1054,6 +1186,8 @@
 			self.elementGraphics[ELEMENT_LAVA] = new Gfx(self.sprite, 48, 64, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE);
 			self.elementGraphics[ELEMENT_DOOR] = new Gfx(self.sprite, 32, 32, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE);
 			self.elementGraphics[ELEMENT_WALL] = new Gfx(self.sprite, 32, 80, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE);
+
+			self.elementGraphics[ENEMY_STRIDER] = new Gfx(self.sprite, 48, 80, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE);
 		},
 		changeState: function( toState ) {
 			var self = this;
@@ -1107,6 +1241,7 @@
 		},
 		readMap: function(obj) {
 			var self = this;
+			self.enemies = [];
 			self.elements = [];
 			self.rElements = [];
 			self.gemCount = 0;
@@ -1132,23 +1267,36 @@
 		saveMap: function( mapName ) {
 			var self = this;
 			var pos = self.player.getActualPosition();
+			var enemies = [];
+			var map = self.elements.map(self.elementToElementCode);
+			self.enemies.forEach(function(enemy) {
+				// set enemies on the map object
+				var p = enemy.getActualPosition();
+				var idx = p.y*MAP_SIZE_X+p.x;
+				map[idx] = self.elementToElementCode(enemy);
+			});
 			//TODO: check if localStorage can be used.
 			localStorage.setItem('map-'+mapName.toLowerCase(), JSON.stringify({
 				// note: elements.map = function. not a map of self game
-				map: self.elements.map(self.elementToElementCode),
+				map: map,
 				gemTarget: self.gemTarget,
 				playerX: pos.x,
 				playerY: pos.y
 			}));
 			return true;
 		},
-		setElementAtIndexByCode: function(idx, elCode) {
+		setElementAtIndexByCode: function(idx, elCode, remvoveEnemy) {
 			this.setElementAtIndex(
 				idx,
-				this.elementCodeToElement(elCode, (idx%MAP_SIZE_X) * TILE_SIZE, parseInt(idx/MAP_SIZE_X, 10) * TILE_SIZE)
+				this.elementCodeToElement(elCode, (idx%MAP_SIZE_X) * TILE_SIZE, parseInt(idx/MAP_SIZE_X, 10) * TILE_SIZE),
+				remvoveEnemy
 			);
 		},
-		setElementAtIndex: function(idx, el) {
+		addEnemy: function( enemy) {
+			var self = this;
+			self.enemies.push(enemy);
+		},
+		setElementAtIndex: function(idx, el, removeEnemy) {
 			var self = this;
 
 			if ( self.elements.length <= idx || idx < 0 ) {
@@ -1156,8 +1304,25 @@
 			}
 
 			var rel = null;
-			var posX = (idx%MAP_SIZE_X) * TILE_SIZE;
-			var posY = parseInt(idx/MAP_SIZE_X, 10) * TILE_SIZE;
+			var actualX = (idx%MAP_SIZE_X);
+			var actualY = parseInt(idx/MAP_SIZE_X, 10);
+			var posX = actualX * TILE_SIZE;
+			var posY = actualY * TILE_SIZE;
+
+			if ( removeEnemy ) {
+				self.enemies.forEach(function(enemy, idx, arr) {
+					var ePos = enemy.getActualPosition();
+					if ( ePos.x === actualX && ePos.y === actualY ) {
+						arr.splice(idx, 1);
+					}
+				});
+			}
+
+			if ( el instanceof Enemy ) {
+				self.addEnemy(el);
+				el = null;
+			}
+
 
 			if ( el === null ) {
 				rel = null;
@@ -1284,12 +1449,15 @@
 				return ELEMENT_DOOR;
 			} else if ( element instanceof Explosion ) {
 				return ELEMENT_EXPLOSION;
+			} else if ( element instanceof Strider ) {
+				return ENEMY_STRIDER;
 			}
 			return ELEMENT_NULL;
 		},
 		elementCodeToElement: function( elementCode, x, y ) {
 			var self = this;
 			var ret = null;
+
 			switch ( elementCode ) {
 				case ELEMENT_GRASS: ret = new Grass(self, x, y); break;
 				case ELEMENT_STONE: ret = new Stone(self, x, y); break;
@@ -1300,6 +1468,7 @@
 				case ELEMENT_DOOR: ret = new Door(self, x, y); break;
 				case ELEMENT_WALL: ret = new Wall(self, x, y); break;
 				case ELEMENT_EXPLOSION: ret = new Explosion(self, x, y); break;
+				case ENEMY_STRIDER: ret = new Strider(self, x, y); break;
 				case ELEMENT_NULL:
 				default: ret = null; break;
 			}
@@ -1340,6 +1509,8 @@
 
 			var i;
 
+			/* MENU
+			=========================================================================== */
 			if ( self.state === Game.STATE_MENU ) {
 				if ( self.inputHandler.isPressed(VK_E) ) {
 					// go to edit mode
@@ -1353,7 +1524,10 @@
 					self.editCurrentMapName = '';
 				}
 
-			} else if ( self.state === Game.STATE_LOADMAP ) {
+			}
+			/* LOAD MAP
+			=========================================================================== */
+			else if ( self.state === Game.STATE_LOADMAP ) {
 
 				// get all the input until enter is pressed . this will be the name of the map.
 				// or if escape is pressed, cancel savemap state and go back to edit mode
@@ -1395,7 +1569,10 @@
 				}
 
 
-			} else if ( self.state === Game.STATE_SAVEMAP ) {
+			}
+			/* LOAD MAP
+			=========================================================================== */
+			else if ( self.state === Game.STATE_SAVEMAP ) {
 
 				// get all the input until enter is pressed . this will be the name of the map.
 				// or if escape is pressed, cancel savemap state and go back to edit mode
@@ -1434,7 +1611,10 @@
 				}
 
 
-			} else if ( self.state === Game.STATE_EDIT ) {
+			}
+			/* EDIT MAP
+			=========================================================================== */
+			else if ( self.state === Game.STATE_EDIT ) {
 
 
 				if ( self.inputHandler.isPressed(VK_O) ) {
@@ -1445,7 +1625,7 @@
 					for ( i = 0; i < MAP_SIZE_Y*MAP_SIZE_X; i++ ) {
 						self.elements.push(null);
 						self.rElements.push(null);
-						self.setElementAtIndexByCode(i, self.editCurrentElement);
+						self.setElementAtIndexByCode(i, self.allEditElements[self.editCurrentElement], 1);
 					}
 
 				}
@@ -1458,6 +1638,7 @@
 					for ( i = 0; i < MAP_SIZE_Y*MAP_SIZE_X; i++ ) {
 						self.elements.push(null);
 						self.rElements.push(null);
+						self.setElementAtIndexByCode(i, ELEMENT_NULL, 1);
 					}
 				}
 
@@ -1492,12 +1673,12 @@
 
 				if ( self.inputHandler.isDown(VK_E) ) {
 					var pos = self.player.getActualPosition();
-					self.setElementAtIndexByCode(pos.y*MAP_SIZE_X+pos.x, self.editCurrentElement);
+					self.setElementAtIndexByCode(pos.y*MAP_SIZE_X+pos.x, self.allEditElements[self.editCurrentElement], 1);
 				}
 
 				if ( self.inputHandler.isDown(VK_X) ) {
 					var pos = self.player.getActualPosition();
-					self.setElementAtIndex(pos.y*MAP_SIZE_X+pos.x, null);
+					self.setElementAtIndex(pos.y*MAP_SIZE_X+pos.x, null, 1);
 				}
 
 				if ( self.inputHandler.isPressed(VK_L) ) {
@@ -1542,7 +1723,10 @@
 					self.changeState(Game.STATE_MENU);
 				}
 
-			} else if ( self.state === Game.STATE_GAME && self.player.substep === 0 ) {
+			}
+			/* GAME
+			=========================================================================== */
+			else if ( self.state === Game.STATE_GAME && self.player.substep === 0 ) {
 
 				if ( self.inputHandler.isDown(VK_UP) ) {
 					self.player.dirX = 0;
@@ -1572,7 +1756,10 @@
 					self.changeState(Game.STATE_MENU);
 				}
 
-			} else {
+			}
+			/* OTHER STATES
+			=========================================================================== */
+			else {
 
 
 				if ( self.inputHandler.isPressed(VK_ESCAPE) ) {
@@ -1652,6 +1839,18 @@
 		},
 
 
+		anyMobileEntityAt: function(playerPosBefore, x, y){
+			var self = this;
+			var anyMobileEntityAt = playerPosBefore.x === x && playerPosBefore.y === y;
+			if ( !anyMobileEntityAt ) {
+				self.enemies.forEach(function(enemy) {
+					var p = enemy.getActualPosition();
+					anyMobileEntityAt = anyMobileEntityAt || p.x === x && p.y === y;
+				});
+			}
+			return anyMobileEntityAt;
+		},
+
 		update: function() {
 			var self = this;
 
@@ -1671,7 +1870,6 @@
 				if ( self.player.substep === 0 ) {
 					// when player is on the door, he won the game! :p
 					var elAtPlayerPos = self.getElementAtPos(playerPosBefore.x, playerPosBefore.y);
-					//console.log('Current pos: '+ playerPosBefore.x+'/'+playerPosBefore.y);
 					if ( elAtPlayerPos instanceof Door && elAtPlayerPos.isOpen ) {
 						// won
 						self.changeState(Game.STATE_WON);
@@ -1697,11 +1895,16 @@
 				self.player.substep = self.player.substep < self.player.stepsPerTile-1 ? self.player.substep+1 : 0;
 			}
 
-
-
-			// then move the elements
+			// then move the enemies and elements
 
 			if ( self.state === Game.STATE_GAME ) {
+
+				// move enemies
+				self.enemies.forEach(function(enemy) {
+					enemy.update();
+				});
+
+
 				var elementsToUpdate = self.isReversed ? self.rElements : self.elements;
 				elementsToUpdate.forEach(function(item, idx) {
 					if ( item === null ) {
@@ -1718,9 +1921,8 @@
 					if ( (item instanceof Stone || item instanceof Bomb) && item.substep === 0 ) {
 						// get element below the stone:
 						var elBelow = self.getElementAtPos(pos.x, pos.y+1);
-						if ( elBelow === null
-							&& ( !(playerPosBefore.x === pos.x && playerPosBefore.y === pos.y+1) || item.wasFalling )
-						) {
+
+						if ( elBelow === null && (item.wasFalling || !self.anyMobileEntityAt(playerPosBefore, pos.x, pos.y+1)) ) {
 							// let the stone fall down
 							item.dirY = 1;
 							item.dirX = 0;
@@ -1736,8 +1938,8 @@
 							var elLeftBelow = self.getElementAtPos(pos.x-1, pos.y+1);
 							if ( elLeft === null
 								&& elLeftBelow === null
-								&& !(playerPosBefore.x === pos.x-1 && playerPosBefore.y === pos.y)
-								&& !(playerPosBefore.x === pos.x-1 && playerPosBefore.y === pos.y+1)
+								&& !(self.anyMobileEntityAt(playerPosBefore, pos.x-1, pos.y))
+								&& !(self.anyMobileEntityAt(playerPosBefore, pos.x-1, pos.y+1))
 								) {
 								item.dirX = -1;
 								item.dirY = 0;
@@ -1750,8 +1952,8 @@
 								var elRightBelow = self.getElementAtPos(pos.x+1, pos.y+1);
 								if ( elRight === null
 									&& elRightBelow === null
-									&& !(playerPosBefore.x === pos.x+1 && playerPosBefore.y === pos.y)
-									&& !(playerPosBefore.x === pos.x+1 && playerPosBefore.y === pos.y+1)
+									&& !(self.anyMobileEntityAt(playerPosBefore, pos.x+1, pos.y))
+									&& !(self.anyMobileEntityAt(playerPosBefore, pos.x+1, pos.y+1))
 									) {
 									item.dirX = 1;
 									item.dirY = 0;
@@ -1777,9 +1979,7 @@
 						}
 					}
 				});
-			}
 
-			if ( self.state === Game.STATE_GAME ) {
 				elementsToUpdate.forEach(function(item, idx) {
 					if ( item === null ) {
 						return;
@@ -1802,6 +2002,25 @@
 						//self.audioHandler.playSequence('deathsong');
 						return;
 					}
+
+					// when the thing is falling and collided with an enemy, let the enemy die!
+					if ( item.isFalling ) {
+						self.enemies.forEach(function(enemy, idx, arr) {
+							if ( item.x <= enemy.x && self.overlaps(item, enemy) ) {
+								arr.splice(idx,1);
+
+								var p = enemy.getActualPosition();
+								if ( item instanceof Bomb ) {
+									self.createExplosion(p.x, p.y);
+								} else {
+									// create explosion only at this one field
+									self.maybeCreateExplosion(p.x, p.y);
+								}
+
+							}
+						});
+					}
+
 
 					if ( item.substep > 0 ) {
 						return;
@@ -1896,8 +2115,26 @@
 
 			if ( self.state === Game.STATE_GAME ) {
 				// player pos to index:
-				var playerPosAfter = self.player.getActualPosition();
 
+				self.enemies.forEach(function(enemy, idx, arr) {
+					if ( self.overlaps(enemy, self.player) ) {
+						// die!!!! :3
+						self.changeState(Game.STATE_GAMEOVER);
+						self.audioHandler.stopSequence(AUDIO_BG_MUSIC);
+						self.audioHandler.play(AUDIO_DEATH);
+					}
+
+
+					var p = enemy.getActualPosition();
+					var elAtEntity= self.getElementAtPos(p.x, p.y);
+					if ( elAtEntity === null ) {
+					} else if ( elAtEntity.isDeadly ) {
+						arr.splice(idx,1);
+					}
+				});
+
+
+				var playerPosAfter = self.player.getActualPosition();
 				var elIndex = playerPosAfter.y*MAP_SIZE_X+playerPosAfter.x;
 				var elAtPlayer= self.getElementAtPos(playerPosAfter.x, playerPosAfter.y);
 				if ( elAtPlayer === null ) {
@@ -1911,7 +2148,6 @@
 				} else if ( elAtPlayer instanceof Grass ) {
 
 					self.deleteElementAtIndex(elIndex);
-					//console.log('ate some grass');
 
 				} else if ( elAtPlayer instanceof Gem ) {
 
@@ -1921,7 +2157,6 @@
 						// open all doors
 						self.openDoors();
 					}
-					//console.log('got an emerald');
 					elAtPlayer.playCollectSound();
 
 				}
@@ -1940,12 +2175,18 @@
 				&& item1.y+item1.h-threshold > item2.y+threshold
 			);
 		},
-
+		drawEnemies: function() {
+			var self = this;
+			self.enemies.forEach(function(enemy) {
+				enemy.render(self.context);
+			});
+			//self.player.render(self.context);
+		},
 		drawElements: function() {
 			var self=  this;
 
 			self.renderStartX = self.player.x - VISIBLE_WIDTH*HALF_TILE_SIZE;
-			self.renderStartY = self.player.y - VISIBLE_WIDTH*HALF_TILE_SIZE;
+			self.renderStartY = self.player.y - VISIBLE_HEIGHT*HALF_TILE_SIZE;
 			if ( self.renderStartX < 0 ) {
 				self.renderStartX = 0;
 			}
@@ -2028,15 +2269,15 @@
 				);
 
 
-				self.allEditElements.forEach(function(i) {
+				self.allEditElements.forEach(function(e, i) {
 
 					if ( self.editCurrentElement === i ) {
 						self.context.fillStyle = '#f00';
 						self.context.fillRect(x-2,y-2, FONT_SIZE+4, FONT_SIZE+4);
 					}
 
-					if ( self.elementGraphics[i] ) {
-						self.elementGraphics[i].render(self.context,x,y,undefined,undefined,FONT_SIZE);
+					if ( self.elementGraphics[e] ) {
+						self.elementGraphics[e].render(self.context,x,y,undefined,undefined,FONT_SIZE);
 					}
 					x+= FONT_SIZE+HALF_FONT_SIZE;
 
@@ -2121,6 +2362,7 @@
 			} else {
 				// render everything
 				self.drawElements();
+				self.drawEnemies();
 				self.drawHud();
 				self.player.render(self.context);
 			}
@@ -2158,6 +2400,7 @@
 			} else {
 				self.elements = [];
 				self.rElements = [];
+				self.enemies = [];
 				self.gemCount = 0;
 				self.gemTarget = 0;
 				for ( var i = 0; i < MAP_SIZE_Y*MAP_SIZE_X; i++ ) {
@@ -2168,7 +2411,7 @@
 			}
 
 
-			self.editCurrentElement = ELEMENT_GRASS;
+			self.editCurrentElement = 0;
 			self.changeState(Game.STATE_EDIT);
 
 		},
