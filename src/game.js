@@ -478,7 +478,9 @@
 		self.substep = 0;
 		self.isWalkable = false;
 		self.isPushable = false;
+		self.isSlippery = false;
 		self.isDeadly = false;
+		self.canFall = false;
 		self.isFalling = false;
 		self.wasFalling = false;
 	}
@@ -501,6 +503,130 @@
 	Entity[PROTO].render = function(context) {
 		var self = this;
 		self.gfx.render(context, self.x - self.game.renderStartX, self.y - self.game.renderStartY);
+	};
+	Entity[PROTO].update = function( idx ) {
+		var self = this;
+
+		var pos = self.getActualPosition();
+
+		if ( self.canFall && self.substep === 0 ) {
+			// get element below the stone:
+			var elBelow = self.game.getElementAtPos(pos.x, pos.y+1);
+
+			if ( elBelow === null && (self.wasFalling || !self.game.anyMobileEntityAt(pos.x, pos.y+1)) ) {
+				// let the stone fall down
+				self.dirY = 1;
+				self.dirX = 0;
+				self.isFalling = true;
+				self.wasFalling = false;
+				if ( ! self instanceof Bomb || ! self.wasFalling ) {
+					self.game.setElementAtIndex(pos.y*MAP_SIZE_X + MAP_SIZE_X + pos.x, new Dummy(self)); // item will fall there eventually!
+				}
+
+			} else if ( typeof elBelow !== UNDEF && elBelow !== null && elBelow.isSlippery && !self.isFalling ) {
+
+				var elLeft = self.game.getElementAtPos(pos.x-1, pos.y);
+				var elLeftBelow = self.game.getElementAtPos(pos.x-1, pos.y+1);
+				if ( elLeft === null
+					&& elLeftBelow === null
+					&& !(self.game.anyMobileEntityAt(pos.x-1, pos.y))
+					&& !(self.game.anyMobileEntityAt(pos.x-1, pos.y+1))
+					) {
+					self.dirX = -1;
+					self.dirY = 0;
+					self.isFalling = true;
+					if ( ! self instanceof Bomb || ! self.wasFalling ) {
+						self.game.setElementAtIndex(pos.y*MAP_SIZE_X + pos.x-1, new Dummy(self)); // item will fall there eventually!
+					}
+				} else {
+					var elRight =  self.game.getElementAtPos(pos.x+1, pos.y);
+					var elRightBelow = self.game.getElementAtPos(pos.x+1, pos.y+1);
+					if ( elRight === null
+						&& elRightBelow === null
+						&& !(self.game.anyMobileEntityAt(pos.x+1, pos.y))
+						&& !(self.game.anyMobileEntityAt(pos.x+1, pos.y+1))
+						) {
+						self.dirX = 1;
+						self.dirY = 0;
+						self.isFalling = true;
+
+						if ( ! self instanceof Bomb || ! self.wasFalling ) {
+							self.game.setElementAtIndex(pos.y*MAP_SIZE_X + pos.x+1, new Dummy(self)); // item will fall there eventually!
+						}
+					}
+				}
+
+			}
+		}
+
+		if (self.wasFalling) {
+			self.wasFalling = false;
+
+			if ( self instanceof Bomb ) {
+				self.game.createExplosion(pos.x,pos.y);
+			}
+			if ( self instanceof Stone ) {
+				self.game.audioHandler.play(AUDIO_STONE);
+			}
+		}
+
+
+
+		if ( self.dirX === 0 && self.dirY === 0 ) {
+			return;
+		}
+
+		self.move();
+		self.substep = self.substep < self.stepsPerTile-1 ? self.substep+1 : 0;
+
+
+
+		// when the thing is falling and collided with the player, let the player die!
+		if ( self.isFalling && self.x <= self.game.player.x && self.game.overlaps(self, self.game.player) ) {
+			self.game.changeState(Game.STATE_GAMEOVER);
+			self.game.audioHandler.stopSequence(AUDIO_BG_MUSIC);
+			self.game.audioHandler.play(AUDIO_DEATH);
+			//self.audioHandler.playSequence('deathsong');
+			return;
+		}
+
+		// when the thing is falling and collided with an enemy, let the enemy die!
+		if ( self.isFalling ) {
+			self.game.enemies.forEach(function(enemy, idx, arr) {
+				if ( self.x <= enemy.x && self.game.overlaps(self, enemy) ) {
+					arr.splice(idx,1);
+
+					var p = enemy.getActualPosition();
+					if ( self instanceof Bomb ) {
+						self.game.createExplosion(p.x, p.y);
+					} else {
+						// create explosion only at this one field
+						self.game.maybeCreateExplosion(p.x, p.y);
+					}
+
+				}
+			});
+		}
+
+
+		if ( self.substep > 0 ) {
+			return;
+		}
+
+		self.dirX = 0;
+		self.dirY = 0;
+
+		// stop falling
+		if ( self.canFall && self.isFalling ) {
+			self.isFalling = false;
+			self.wasFalling = true;
+		}
+
+		var pos = self.getActualPosition();
+
+		self.game.deleteElementAtIndex(idx);
+		self.game.setElementAtIndex(pos.y*MAP_SIZE_X+pos.x, self);
+
 	};
 
 
@@ -551,7 +677,8 @@
 	function Enemy(g, gfx, x, y, w, h) {
 		var self = this;
 		Entity[PROTO][CONSTRUCTOR].call(self, g, gfx, x, y, w, h);
-		this.isDeadly = true;
+		self.isDeadly = true;
+		self.ticktick = 0;
 	}
 	Enemy[PROTO] = Object.create(Entity[PROTO]);
 	Enemy[PROTO][CONSTRUCTOR] = Enemy;
@@ -560,6 +687,52 @@
 		var screenX = self.x - self.game.renderStartX;
 		var screenY = self.y - self.game.renderStartY;
 		self.gfx.render(context, screenX, screenY);
+	};
+	Enemy[PROTO].determineDirection = function() {};
+	Enemy[PROTO].canMove = function() {
+		var self = this;
+		var canMove = self.dirX !== 0 || self.dirY !== 0;
+		if ( self.substep === 0 ) {
+
+			var pos = self.getActualPosition();
+
+			// enemy started moving. lets see if he hits the bounds of the map or hit an obstacle
+			if ( self.x+self.dirX < 0 || self.x+self.dirX > MAP_SIZE_X*TILE_SIZE-TILE_SIZE
+				|| self.y+self.dirY < 0 || self.y+self.dirY > MAP_SIZE_Y*TILE_SIZE-TILE_SIZE
+				|| self.game.getElementAtPos(pos.x+self.dirX, pos.y+self.dirY) !== null
+			) {
+				canMove = false;
+			}
+
+		}
+		return canMove;
+	};
+	Enemy[PROTO].update = function() {
+		var self = this;
+
+		if ( self.game.state !== Game.STATE_GAME ) {
+			return;
+		}
+
+		// check if this enemy must wait until next move.
+		if ( self.ticktick > 0 ) {
+			self.ticktick--;
+			return;
+		}
+
+		self.determineDirection();
+
+		if ( self.canMove() ) {
+			self.move();
+			// enemy moves each field in 8 steps
+			self.substep = self.substep < self.stepsPerTile-1 ? self.substep+1 : 0;
+		} else {
+			// this means the unit hit some kind of obstacle or end of map..
+			// stop moving and stay there for some ticks:
+			self.ticktick = 10;
+			self.dirX = 0;
+			self.dirY = 0;
+		}
 	};
 
 	/* Strider
@@ -570,22 +743,13 @@
 		self.speed = OBJECT_SPEED;
 		self.stepsPerTile = TILE_SIZE/self.speed;
 		self.substep = 0; // max TILE_SIZE/this.speed
-		self.gemCount = 0;
-		self.ticktick = 0;
 	}
 	Strider[PROTO] = Object.create(Enemy[PROTO]);
 	Strider[PROTO][CONSTRUCTOR] = Strider;
-	Strider[PROTO].update = function() {
-
+	Strider[PROTO].determineDirection = function() {
 		var self = this;
-		if ( self.ticktick > 0 ) {
-			self.ticktick--;
-			return;
-		}
 		if ( self.dirX < 0 ) {
 			self.dirY = 0;
-			// check if a not null tile is left of this
-
 		} else if ( self.dirX > 0 ) {
 			self.dirY = 0;
 		} else if ( self.dirY < 0 ) {
@@ -606,79 +770,6 @@
 				self.dirY = -1;
 			}
 		}
-
-		var posBefore = self.getActualPosition();
-
-		if ( self.dirX !== 0 || self.dirY !== 0 ) {
-
-			self.move();
-
-			// player moves each field in 8 steps
-			self.substep = self.substep < self.stepsPerTile-1 ? self.substep+1 : 0;
-
-		}
-
-		// check if must unmove
-
-		var unmove = false;
-		if ( self.substep === 1 ) {
-
-			// player started moving. lets see if he hits the bounds of the map, if yes, then unmove and set substep to 0;
-			if ( ( self.x <= 0 && self.dirX < 0 )
-				|| ( self.x >= MAP_SIZE_X*TILE_SIZE-TILE_SIZE && self.dirX > 0 )
-				|| ( self.y <= 0 && self.dirY < 0 )
-				|| ( self.y >= MAP_SIZE_Y*TILE_SIZE-TILE_SIZE && self.dirY > 0 )
-			) {
-				unmove = true;
-			} else if ( self.dirX !== 0 ) {
-
-				if ( self.game.state === Game.STATE_GAME ) {
-					// check left right elements if player can move there
-					// moving horizontally
-					var nextEl= self.game.getElementAtPos(posBefore.x+self.dirX, posBefore.y);
-
-					// do we have to unmove the player?
-					if ( typeof nextEl === UNDEF ) {
-						unmove = true;
-					} else if ( nextEl === null ) {
-						// ok
-					} else {
-						unmove = true;
-					}
-				}
-			} else if ( self.dirY !== 0 ) {
-				if ( self.game.state === Game.STATE_GAME ) {
-					// check top/bottom elements
-					// moving vertically
-
-					var nextEl= self.game.getElementAtPos(posBefore.x, posBefore.y+self.dirY);
-
-					// do we have to unmove the player?
-					if ( typeof nextEl === UNDEF ) {
-						unmove = true;
-					} else if ( nextEl === null ) {
-						// ok
-					} else {
-						unmove = true;
-					}
-				}
-			}
-
-		}
-
-		if ( unmove ) {
-			// just dont move..
-			self.unmove();
-			self.substep = 0;
-
-			// this also means the unit hit some kind of obstacle..
-			// stop moving and stay there for some ticks:
-			self.ticktick = 10;
-			self.dirX = 0;
-			self.dirY = 0;
-
-		}
-
 	};
 
 
@@ -693,6 +784,8 @@
 		self.substep = 0; // max TILE_SIZE/self.speed
 		self.isWalkable = false;
 		self.isPushable = true;
+		self.canFall = true;
+		self.isSlippery = true;
 	}
 	Stone[PROTO] = Object.create(Entity[PROTO]);
 	Stone[PROTO][CONSTRUCTOR] = Stone;
@@ -707,6 +800,8 @@
 		self.substep = 0; // max TILE_SIZE/self.speed
 		self.isWalkable = false;
 		self.isPushable = true;
+		self.canFall = true;
+		self.isSlippery = true;
 	}
 	Bomb[PROTO] = Object.create(Entity[PROTO]);
 	Bomb[PROTO][CONSTRUCTOR] = Bomb;
@@ -807,6 +902,12 @@
 	}
 	Explosion[PROTO] = Object.create(Entity[PROTO]);
 	Explosion[PROTO][CONSTRUCTOR] = Explosion;
+	Explosion[PROTO].update = function(idx) {
+		var self = this;
+		if ( --self.ticktick === 0 ) {
+			self.game.deleteElementAtIndex(idx);
+		}
+	};
 
 	/* Lava
 	===============================================================*/
@@ -1839,9 +1940,10 @@
 		},
 
 
-		anyMobileEntityAt: function(playerPosBefore, x, y){
+		anyMobileEntityAt: function(x, y){
 			var self = this;
-			var anyMobileEntityAt = playerPosBefore.x === x && playerPosBefore.y === y;
+			var playerPos = self.player.getActualPosition();
+			var anyMobileEntityAt = playerPos.x === x && playerPos.y === y;
 			if ( !anyMobileEntityAt ) {
 				self.enemies.forEach(function(enemy) {
 					var p = enemy.getActualPosition();
@@ -1862,25 +1964,68 @@
 
 			self.lastUpdate = currentTime;
 
-			// update all elements ( they might start or stop falling )
-			var playerPosBefore = self.player.getActualPosition();
-
+			// then move the enemies and elements
 
 			if ( self.state === Game.STATE_GAME ) {
-				if ( self.player.substep === 0 ) {
-					// when player is on the door, he won the game! :p
-					var elAtPlayerPos = self.getElementAtPos(playerPosBefore.x, playerPosBefore.y);
-					if ( elAtPlayerPos instanceof Door && elAtPlayerPos.isOpen ) {
-						// won
-						self.changeState(Game.STATE_WON);
-						self.player.dirX = 0;
-						self.player.dirY = 0;
-						self.audioHandler.stopSequence(AUDIO_BG_MUSIC);
+
+				// move enemies
+				self.enemies.forEach(function(enemy) {
+					enemy.update();
+				});
+
+				var elementsToUpdate = self.isReversed ? self.rElements : self.elements;
+				elementsToUpdate.forEach(function(item, idx) {
+					if ( item === null ) {
 						return;
 					}
-				}
+					item.update(idx);
+				});
 			}
 
+
+			var player = self.player;
+			var playerPos = player.getActualPosition();
+			//var canMove = player.dirX !== 0 || player.dirY !== 0;
+			//if ( player.substep === 0 ) {
+			//
+			//	var pos = player.getActualPosition();
+			//
+			//	// check if player hits boundry of map
+			//	if ( player.x+player.dirX < 0 || player.x+player.dirX > MAP_SIZE_X*TILE_SIZE-TILE_SIZE
+			//		|| player.y+player.dirY < 0 || player.y+player.dirY > MAP_SIZE_Y*TILE_SIZE-TILE_SIZE
+			//	) {
+			//		canMove = false;
+			//	} else {
+			//
+			//		if ( self.state === Game.STATE_GAME ) {
+			//			var nextEl= self.getElementAtPos(playerPos.x+player.dirX, playerPos.y+player.dirY);
+			//
+			//			if ( nextEl !== null && !nextEl.isWalkable ) {
+			//				// dont need to check UNDEF because we already checked bounds of map
+			//
+			//				// if player is moving horizontally, we need to check next next element
+			//				// if player is moving vertically, we need no further checks
+			//				if ( player.dirY !== 0 ) {
+			//					canMove = false;
+			//				} else if ( nextEl.isPushable ) {
+			//					var nextNextEl = self.getElementAtPos(playerPos.x+self.player.dirX+self.player.dirX, playerPos.y+player.dirY+player.dirY);
+			//					if ( nextNextEl !== null ) {
+			//						canMove = false;
+			//					} else {
+			//						// push next el in same direction
+			//						if ( nextEl.dirX === 0 && nextEl.dirY === 0 ) {
+			//							nextEl.dirX = self.player.dirX;
+			//						}
+			//					}
+			//				}
+			//			}
+			//		}
+			//	}
+			//
+			//}
+			//return canMove;
+
+	////////////////////////////
 
 
 			// first move the player
@@ -1895,154 +2040,6 @@
 				self.player.substep = self.player.substep < self.player.stepsPerTile-1 ? self.player.substep+1 : 0;
 			}
 
-			// then move the enemies and elements
-
-			if ( self.state === Game.STATE_GAME ) {
-
-				// move enemies
-				self.enemies.forEach(function(enemy) {
-					enemy.update();
-				});
-
-
-				var elementsToUpdate = self.isReversed ? self.rElements : self.elements;
-				elementsToUpdate.forEach(function(item, idx) {
-					if ( item === null ) {
-						return;
-					}
-
-					if ( item instanceof Explosion && --item.ticktick === 0 ) {
-						self.deleteElementAtIndex(idx);
-						return;
-					}
-
-					var pos = item.getActualPosition();
-
-					if ( (item instanceof Stone || item instanceof Bomb) && item.substep === 0 ) {
-						// get element below the stone:
-						var elBelow = self.getElementAtPos(pos.x, pos.y+1);
-
-						if ( elBelow === null && (item.wasFalling || !self.anyMobileEntityAt(playerPosBefore, pos.x, pos.y+1)) ) {
-							// let the stone fall down
-							item.dirY = 1;
-							item.dirX = 0;
-							item.isFalling = true;
-							item.wasFalling = false;
-							if ( ! item instanceof Bomb || ! item.wasFalling ) {
-								self.setElementAtIndex(pos.y*MAP_SIZE_X + MAP_SIZE_X + pos.x, new Dummy(item)); // item will fall there eventually!
-							}
-
-						} else if ( (elBelow instanceof Stone || elBelow instanceof Bomb) && !item.isFalling ) {
-
-							var elLeft = self.getElementAtPos(pos.x-1, pos.y);
-							var elLeftBelow = self.getElementAtPos(pos.x-1, pos.y+1);
-							if ( elLeft === null
-								&& elLeftBelow === null
-								&& !(self.anyMobileEntityAt(playerPosBefore, pos.x-1, pos.y))
-								&& !(self.anyMobileEntityAt(playerPosBefore, pos.x-1, pos.y+1))
-								) {
-								item.dirX = -1;
-								item.dirY = 0;
-								item.isFalling = true;
-								if ( ! item instanceof Bomb || ! item.wasFalling ) {
-									self.setElementAtIndex(pos.y*MAP_SIZE_X + pos.x-1, new Dummy(item)); // item will fall there eventually!
-								}
-							} else {
-								var elRight =  self.getElementAtPos(pos.x+1, pos.y);
-								var elRightBelow = self.getElementAtPos(pos.x+1, pos.y+1);
-								if ( elRight === null
-									&& elRightBelow === null
-									&& !(self.anyMobileEntityAt(playerPosBefore, pos.x+1, pos.y))
-									&& !(self.anyMobileEntityAt(playerPosBefore, pos.x+1, pos.y+1))
-									) {
-									item.dirX = 1;
-									item.dirY = 0;
-									item.isFalling = true;
-
-									if ( ! item instanceof Bomb || ! item.wasFalling ) {
-										self.setElementAtIndex(pos.y*MAP_SIZE_X + pos.x+1, new Dummy(item)); // item will fall there eventually!
-									}
-								}
-							}
-
-						}
-					}
-
-					if ( item instanceof Bomb && item.wasFalling ) {
-						self.createExplosion(pos.x,pos.y);
-					}
-					if (item.wasFalling) {
-						item.wasFalling = false;
-
-						if ( item instanceof Stone ) {
-							self.audioHandler.play(AUDIO_STONE);
-						}
-					}
-				});
-
-				elementsToUpdate.forEach(function(item, idx) {
-					if ( item === null ) {
-						return;
-					}
-
-					if ( item.dirX === 0 && item.dirY === 0 ) {
-						return;
-					}
-
-					item.move();
-					item.substep = item.substep < item.stepsPerTile-1 ? item.substep+1 : 0;
-
-
-
-					// when the thing is falling and collided with the player, let the player die!
-					if ( item.isFalling && item.x <= self.player.x && self.overlaps(item, self.player) ) {
-						self.changeState(Game.STATE_GAMEOVER);
-						self.audioHandler.stopSequence(AUDIO_BG_MUSIC);
-						self.audioHandler.play(AUDIO_DEATH);
-						//self.audioHandler.playSequence('deathsong');
-						return;
-					}
-
-					// when the thing is falling and collided with an enemy, let the enemy die!
-					if ( item.isFalling ) {
-						self.enemies.forEach(function(enemy, idx, arr) {
-							if ( item.x <= enemy.x && self.overlaps(item, enemy) ) {
-								arr.splice(idx,1);
-
-								var p = enemy.getActualPosition();
-								if ( item instanceof Bomb ) {
-									self.createExplosion(p.x, p.y);
-								} else {
-									// create explosion only at this one field
-									self.maybeCreateExplosion(p.x, p.y);
-								}
-
-							}
-						});
-					}
-
-
-					if ( item.substep > 0 ) {
-						return;
-					}
-
-					item.dirX = 0;
-					item.dirY = 0;
-
-					// stop falling
-					if ( (item instanceof Stone || item instanceof Bomb) && item.isFalling ) {
-						item.isFalling = false;
-						item.wasFalling = true;
-					}
-
-					var pos = item.getActualPosition();
-
-					self.deleteElementAtIndex(idx);
-					self.setElementAtIndex(pos.y*MAP_SIZE_X+pos.x, item);
-
-				});
-			}
-
 			var unmove = false;
 			if ( self.player.substep === 1 ) {
 
@@ -2053,13 +2050,13 @@
 					|| ( self.player.y >= MAP_SIZE_Y*TILE_SIZE-TILE_SIZE && self.player.dirY > 0 )
 					) {
 					unmove = true;
-				} else if ( self.player.dirX !== 0 ) {
+				} else if ( self.state === Game.STATE_GAME ) {
 
-					if ( self.state === Game.STATE_GAME ) {
+					if ( self.player.dirX !== 0 ) {
 						// check left right elements if player can move there
 						// moving horizontally
-						var nextEl= self.getElementAtPos(playerPosBefore.x+self.player.dirX, playerPosBefore.y);
-						var nextNextEl = self.getElementAtPos(playerPosBefore.x+self.player.dirX+self.player.dirX, playerPosBefore.y);
+						var nextEl= self.getElementAtPos(playerPos.x+self.player.dirX, playerPos.y);
+						var nextNextEl = self.getElementAtPos(playerPos.x+self.player.dirX+self.player.dirX, playerPos.y);
 
 						// do we have to unmove the player?
 						if ( typeof nextEl === UNDEF ) {
@@ -2079,13 +2076,11 @@
 						} else {
 							unmove = true;
 						}
-					}
-				} else if ( self.player.dirY !== 0 ) {
-					if ( self.state === Game.STATE_GAME ) {
+					} else if ( self.player.dirY !== 0 ) {
 						// check top/bottom elements
 						// moving vertically
 
-						var nextEl= self.getElementAtPos(playerPosBefore.x, playerPosBefore.y+self.player.dirY);
+						var nextEl= self.getElementAtPos(playerPos.x, playerPos.y+self.player.dirY);
 						//var nextNextEl = self.elements[(playerPosBefore.y+self.player.dirY+self.player.dirY)*MAP_SIZE_X+playerPosBefore.x];
 
 						// do we have to unmove the player?
@@ -2097,15 +2092,20 @@
 							unmove = true;
 						}
 					}
+
 				}
+
+
 
 			}
 
 			if ( unmove ) {
+			//	self.player.move();
+			//	self.player.substep = self.player.substep < self.player.stepsPerTile-1 ? self.player.substep+1 : 0;
+			//} else {
 				// just dont move..
 				self.player.unmove();
 				self.player.substep = 0;
-				playerHasMoved = false;
 			}
 
 
@@ -2159,7 +2159,17 @@
 					}
 					elAtPlayer.playCollectSound();
 
+				} else if ( self.player.substep === 0 && elAtPlayer instanceof Door && elAtPlayer.isOpen ) {
+					// when player is on the door, he won the game! :p
+
+					// won
+					self.changeState(Game.STATE_WON);
+					self.player.dirX = 0;
+					self.player.dirY = 0;
+					self.audioHandler.stopSequence(AUDIO_BG_MUSIC);
 				}
+
+
 			}
 
 
