@@ -79,6 +79,7 @@
 	var ELEMENT_EXPLOSION = 9;
 
 	var ENEMY_STRIDER = 10;
+	var ENEMY_NIKI = 11;
 
 
 	/////////////////////////////////////////////////////////////////
@@ -483,6 +484,7 @@
 		self.canFall = false;
 		self.isFalling = false;
 		self.wasFalling = false;
+		self.ticks = 0;
 	}
 	Entity[PROTO].getActualPosition = function() {
 		return {
@@ -506,6 +508,12 @@
 	};
 	Entity[PROTO].update = function( idx ) {
 		var self = this;
+
+		if ( self.game.state !== Game.STATE_GAME || self.game.ticks <= self.ticks ) {
+			return;
+		}
+
+		self.ticks = self.game.ticks;
 
 		var pos = self.getActualPosition();
 
@@ -578,36 +586,6 @@
 
 		self.move();
 		self.substep = self.substep < self.stepsPerTile-1 ? self.substep+1 : 0;
-
-
-
-		// when the thing is falling and collided with the player, let the player die!
-		if ( self.isFalling && self.x <= self.game.player.x && self.game.overlaps(self, self.game.player) ) {
-			self.game.changeState(Game.STATE_GAMEOVER);
-			self.game.audioHandler.stopSequence(AUDIO_BG_MUSIC);
-			self.game.audioHandler.play(AUDIO_DEATH);
-			//self.audioHandler.playSequence('deathsong');
-			return;
-		}
-
-		// when the thing is falling and collided with an enemy, let the enemy die!
-		if ( self.isFalling ) {
-			self.game.enemies.forEach(function(enemy, idx, arr) {
-				if ( self.x <= enemy.x && self.game.overlaps(self, enemy) ) {
-					arr.splice(idx,1);
-
-					var p = enemy.getActualPosition();
-					if ( self instanceof Bomb ) {
-						self.game.createExplosion(p.x, p.y);
-					} else {
-						// create explosion only at this one field
-						self.game.maybeCreateExplosion(p.x, p.y);
-					}
-
-				}
-			});
-		}
-
 
 		if ( self.substep > 0 ) {
 			return;
@@ -709,10 +687,10 @@
 	};
 	Enemy[PROTO].update = function() {
 		var self = this;
-
-		if ( self.game.state !== Game.STATE_GAME ) {
+		if ( self.game.state !== Game.STATE_GAME || self.game.ticks <= self.ticks ) {
 			return;
 		}
+		self.ticks = self.game.ticks;
 
 		// check if this enemy must wait until next move.
 		if ( self.ticktick > 0 ) {
@@ -730,8 +708,9 @@
 			// this means the unit hit some kind of obstacle or end of map..
 			// stop moving and stay there for some ticks:
 			self.ticktick = 10;
-			self.dirX = 0;
-			self.dirY = 0;
+			self.substep = 0;
+			//self.dirX = 0;
+			//self.dirY = 0;
 		}
 	};
 
@@ -771,6 +750,132 @@
 			}
 		}
 	};
+
+	/* Niki
+	 ===============================================================*/
+	function Niki(g, x, y) {
+		var self = this;
+		Enemy[PROTO][CONSTRUCTOR].call(self, g, g.elementGraphics[ENEMY_NIKI], x, y, TILE_SIZE, TILE_SIZE);
+		self.speed = OBJECT_SPEED;
+		self.stepsPerTile = TILE_SIZE/self.speed;
+		self.substep = 0; // max TILE_SIZE/this.speed
+		self.dir = Math.random() > 0.5 ? 1 : 0;
+	}
+	Niki[PROTO] = Object.create(Enemy[PROTO]);
+	Niki[PROTO][CONSTRUCTOR] = Niki;
+	Niki[PROTO].turnLeft = function() {
+		var self = this;
+		if ( self.dirX < 0 ) {
+			self.dirX = 0;
+			self.dirY = 1; // down
+		} else if ( self.dirY > 0 ) {
+			self.dirY = 0;
+			self.dirX = 1; // right
+		} else if ( self.dirX > 0) {
+			self.dirX = 0;
+			self.dirY = -1; // up
+		} else if ( self.dirY < 0 ) {
+			self.dirY = 0;
+			self.dirX = -1; // left
+		}
+	};
+	Niki[PROTO].turnRight = function() {
+		var self = this;
+		self.turnLeft();
+		self.turnLeft();
+		self.turnLeft();
+	};
+	Niki[PROTO].determineDirection = function() {
+
+		// check if there is a wall at direction, if yes, turn left
+		var self = this;
+		if ( self.substep > 0 ) {
+			return;
+		}
+
+		if ( self.dirX < 0 ) {
+			self.dirY = 0;
+		} else if ( self.dirX > 0 ) {
+			self.dirY = 0;
+		} else if ( self.dirY < 0 ) {
+			self.dirX = 0;
+		} else if ( self.dirY > 0 ) {
+			self.dirX = 0;
+		}
+
+
+		if ( self.dirX === 0 && self.dirY === 0 ) {
+			self.dirX = 1;
+		}
+
+
+		var pos = self.getActualPosition();
+
+		var canMoveForward = false;
+		var nextEl= self.game.getElementAtPos(pos.x+self.dirX, pos.y+self.dirY);
+		if ( nextEl === null ) {
+			// can move forward...
+			canMoveForward = true;
+		}
+		self.turnRight();
+		//if ( self.dir === 1 ) {
+		//	self.turnLeft();
+		//} else {
+		//	self.turnRight();
+		//}
+		var canMoveSide = false;
+		var nextEl= self.game.getElementAtPos(pos.x+self.dirX, pos.y+self.dirY);
+
+		if ( nextEl === null ) {
+			canMoveSide = true;
+		} // else keep current direction
+
+		if ( canMoveSide ) {
+			// ok
+		} else if ( canMoveForward ) {
+			// turn back to previous direction
+			self.turnLeft();
+			//if ( self.dir === 1 ) {
+			//	self.turnRight();
+			//} else {
+			//	self.turnLeft();
+			//}
+		} else {
+			self.turnLeft();
+			self.turnLeft();
+		}
+
+	};
+	Niki[PROTO].render = function(context) {
+		var self = this;
+		var cw = CANVAS_WIDTH;
+		var ch = CANVAS_HEIGHT;
+		if ( this.dirX > 0 ) {
+			context.save();
+			context.translate(self.x - self.game.renderStartX + HALF_TILE_SIZE, self.y - self.game.renderStartY + HALF_TILE_SIZE);
+			context.rotate(180*Math.PI / 180);
+			self.gfx.render(context, -HALF_TILE_SIZE, -HALF_TILE_SIZE);
+			context.restore();
+		} else if ( this.dirY < 0 ) {
+			context.save();
+			context.translate(self.x - self.game.renderStartX + HALF_TILE_SIZE, self.y - self.game.renderStartY + HALF_TILE_SIZE);
+			context.rotate(90*Math.PI / 180);
+			self.gfx.render(context, -HALF_TILE_SIZE, -HALF_TILE_SIZE);
+			context.restore();
+		} else if ( this.dirY > 0 ) {
+			context.save();
+			context.translate(self.x - self.game.renderStartX + HALF_TILE_SIZE, self.y - self.game.renderStartY + HALF_TILE_SIZE);
+			context.rotate(270*Math.PI / 180);
+			self.gfx.render(context, -HALF_TILE_SIZE, -HALF_TILE_SIZE);
+			context.restore();
+		} else {
+			// default
+			self.gfx.render(context, self.x - self.game.renderStartX, self.y - self.game.renderStartY);
+		}
+	};
+
+
+
 
 
 
@@ -1032,7 +1137,8 @@
 			ELEMENT_LAVA,
 			ELEMENT_DOOR,
 			ELEMENT_WALL,
-			ENEMY_STRIDER
+			ENEMY_STRIDER,
+			ENEMY_NIKI
 		];
 
 		self.elementGraphics = [];
@@ -1289,6 +1395,7 @@
 			self.elementGraphics[ELEMENT_WALL] = new Gfx(self.sprite, 32, 80, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE);
 
 			self.elementGraphics[ENEMY_STRIDER] = new Gfx(self.sprite, 48, 80, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE);
+			self.elementGraphics[ENEMY_NIKI] = new Gfx(self.sprite, 64, 64, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE);
 		},
 		changeState: function( toState ) {
 			var self = this;
@@ -1552,6 +1659,8 @@
 				return ELEMENT_EXPLOSION;
 			} else if ( element instanceof Strider ) {
 				return ENEMY_STRIDER;
+			} else if ( element instanceof Niki ) {
+				return ENEMY_NIKI;
 			}
 			return ELEMENT_NULL;
 		},
@@ -1570,6 +1679,7 @@
 				case ELEMENT_WALL: ret = new Wall(self, x, y); break;
 				case ELEMENT_EXPLOSION: ret = new Explosion(self, x, y); break;
 				case ENEMY_STRIDER: ret = new Strider(self, x, y); break;
+				case ENEMY_NIKI: ret = new Niki(self, x, y); break;
 				case ELEMENT_NULL:
 				default: ret = null; break;
 			}
@@ -1984,138 +2094,97 @@
 
 
 			var player = self.player;
-			var playerPos = player.getActualPosition();
-			//var canMove = player.dirX !== 0 || player.dirY !== 0;
-			//if ( player.substep === 0 ) {
-			//
-			//	var pos = player.getActualPosition();
-			//
-			//	// check if player hits boundry of map
-			//	if ( player.x+player.dirX < 0 || player.x+player.dirX > MAP_SIZE_X*TILE_SIZE-TILE_SIZE
-			//		|| player.y+player.dirY < 0 || player.y+player.dirY > MAP_SIZE_Y*TILE_SIZE-TILE_SIZE
-			//	) {
-			//		canMove = false;
-			//	} else {
-			//
-			//		if ( self.state === Game.STATE_GAME ) {
-			//			var nextEl= self.getElementAtPos(playerPos.x+player.dirX, playerPos.y+player.dirY);
-			//
-			//			if ( nextEl !== null && !nextEl.isWalkable ) {
-			//				// dont need to check UNDEF because we already checked bounds of map
-			//
-			//				// if player is moving horizontally, we need to check next next element
-			//				// if player is moving vertically, we need no further checks
-			//				if ( player.dirY !== 0 ) {
-			//					canMove = false;
-			//				} else if ( nextEl.isPushable ) {
-			//					var nextNextEl = self.getElementAtPos(playerPos.x+self.player.dirX+self.player.dirX, playerPos.y+player.dirY+player.dirY);
-			//					if ( nextNextEl !== null ) {
-			//						canMove = false;
-			//					} else {
-			//						// push next el in same direction
-			//						if ( nextEl.dirX === 0 && nextEl.dirY === 0 ) {
-			//							nextEl.dirX = self.player.dirX;
-			//						}
-			//					}
-			//				}
-			//			}
-			//		}
-			//	}
-			//
-			//}
-			//return canMove;
 
-	////////////////////////////
+			// if player has any direction, he can possible move, otherwise he cant
+			var canMove = player.dirX !== 0 || player.dirY !== 0;
 
+			if ( canMove && player.substep === 0 ) {
+				// only if player is in substep 0, he can start moving so only then we have to check for map bounds etc.
 
-			// first move the player
-			var playerHasMoved = false;
-
-			// check if at the position is something and that something is not already moving
-			if ( self.player.dirX !== 0 || self.player.dirY !== 0 ) {
-				self.player.move();
-				playerHasMoved = true;
-
-				// player moves each field in 8 steps
-				self.player.substep = self.player.substep < self.player.stepsPerTile-1 ? self.player.substep+1 : 0;
-			}
-
-			var unmove = false;
-			if ( self.player.substep === 1 ) {
-
-				// player started moving. lets see if he hits the bounds of the map, if yes, then unmove and set substep to 0;
-				if ( ( self.player.x <= 0 && self.player.dirX < 0 )
-					|| ( self.player.x >= MAP_SIZE_X*TILE_SIZE-TILE_SIZE && self.player.dirX > 0 )
-					|| ( self.player.y <= 0 && self.player.dirY < 0 )
-					|| ( self.player.y >= MAP_SIZE_Y*TILE_SIZE-TILE_SIZE && self.player.dirY > 0 )
-					) {
-					unmove = true;
+				// check if player hits boundry of map
+				if ( player.x+player.dirX < 0 || player.x+player.dirX > MAP_SIZE_X*TILE_SIZE-TILE_SIZE
+					|| player.y+player.dirY < 0 || player.y+player.dirY > MAP_SIZE_Y*TILE_SIZE-TILE_SIZE
+				) {
+					// have hit boundries! cant move
+					canMove = false;
 				} else if ( self.state === Game.STATE_GAME ) {
 
-					if ( self.player.dirX !== 0 ) {
-						// check left right elements if player can move there
-						// moving horizontally
-						var nextEl= self.getElementAtPos(playerPos.x+self.player.dirX, playerPos.y);
-						var nextNextEl = self.getElementAtPos(playerPos.x+self.player.dirX+self.player.dirX, playerPos.y);
+					var playerPos = player.getActualPosition();
 
-						// do we have to unmove the player?
-						if ( typeof nextEl === UNDEF ) {
-							unmove = true;
-						} else if ( nextEl === null || nextEl.isWalkable ) {
-							// ok
-						} else if ( nextEl.isPushable ) {
-							// dont know yet, maybe the stone/bomb can be pushed
-							if ( nextNextEl === null ) {
-								// ok
-								if ( nextEl.dirX === 0 && nextEl.dirY === 0 ) {
-									nextEl.dirX = self.player.dirX;
-								}
-							} else {
-								unmove = true;
-							}
-						} else {
-							unmove = true;
+					var nextEl= self.getElementAtPos(playerPos.x+player.dirX, playerPos.y+player.dirY);
+					if ( typeof nextEl === UNDEF ) {
+						canMove = false;
+					} else if ( nextEl === null || nextEl.isWalkable ) {
+						// ok
+					} else if ( player.dirY !== 0 || !nextEl.isPushable ) {
+						// moving vertically, but in the direction of the player is some obstacle
+
+						// or else:
+						// we know now that the player is moving horizontally so we check if the
+						// element in player direction is pushable, if not the player cant move
+
+						canMove = false;
+					} else if ( self.getElementAtPos(playerPos.x+player.dirX+player.dirX, playerPos.y) === null ) {
+						// player is moving horizontally and nextel is pushable
+						// check next next element => only if it is null can the player move
+						// ok
+						if ( nextEl.dirX === 0 && nextEl.dirY === 0 ) {
+							nextEl.dirX = player.dirX;
 						}
-					} else if ( self.player.dirY !== 0 ) {
-						// check top/bottom elements
-						// moving vertically
-
-						var nextEl= self.getElementAtPos(playerPos.x, playerPos.y+self.player.dirY);
-						//var nextNextEl = self.elements[(playerPosBefore.y+self.player.dirY+self.player.dirY)*MAP_SIZE_X+playerPosBefore.x];
-
-						// do we have to unmove the player?
-						if ( typeof nextEl === UNDEF ) {
-							unmove = true;
-						} else if ( nextEl === null || nextEl.isWalkable ) {
-							// ok
-						} else {
-							unmove = true;
-						}
+					} else {
+						canMove = false;
 					}
 
 				}
 
-
-
 			}
 
-			if ( unmove ) {
-			//	self.player.move();
-			//	self.player.substep = self.player.substep < self.player.stepsPerTile-1 ? self.player.substep+1 : 0;
-			//} else {
-				// just dont move..
-				self.player.unmove();
-				self.player.substep = 0;
-			}
-
-
-			if ( playerHasMoved && self.player.substep === 0 ) {
-				self.audioHandler.play(AUDIO_WALK);
+			if ( canMove ) {
+				player.move();
+				player.substep = player.substep < player.stepsPerTile-1 ? player.substep+1 : 0;
+				if ( self.player.substep === 0 ) {
+					self.audioHandler.play(AUDIO_WALK);
+				}
 			}
 
 			if ( self.state === Game.STATE_GAME ) {
+
+				// check element collisions
+				elementsToUpdate.forEach(function(element) {
+					// if the thing is null or was not falling, dont check collisions
+					if ( element === null || !element.wasFalling ) {
+						return;
+					}
+
+					// when the thing is falling and collided with the player, let the player die!
+					if ( element.y <= player.y && self.overlaps(element, player) ) {
+						self.changeState(Game.STATE_GAMEOVER);
+						self.audioHandler.stopSequence(AUDIO_BG_MUSIC);
+						self.audioHandler.play(AUDIO_DEATH);
+						//self.audioHandler.playSequence('deathsong');
+						return;
+					}
+
+					// when the thing is falling and collided with an enemy, let the enemy die!
+					self.enemies.forEach(function(enemy, idx, arr) {
+						if ( element.x > enemy.x || !self.overlaps(element, enemy) ) {
+							return;
+						}
+						arr.splice(idx,1);
+
+						var p = enemy.getActualPosition();
+						if ( element instanceof Bomb ) {
+							self.createExplosion(p.x, p.y);
+						} else {
+							// create explosion only at this one field
+							self.maybeCreateExplosion(p.x, p.y);
+						}
+					});
+
+				});
 				// player pos to index:
 
+				// check enemy collisions
 				self.enemies.forEach(function(enemy, idx, arr) {
 					if ( self.overlaps(enemy, self.player) ) {
 						// die!!!! :3
@@ -2134,7 +2203,7 @@
 				});
 
 
-				var playerPosAfter = self.player.getActualPosition();
+				var playerPosAfter = player.getActualPosition();
 				var elIndex = playerPosAfter.y*MAP_SIZE_X+playerPosAfter.x;
 				var elAtPlayer= self.getElementAtPos(playerPosAfter.x, playerPosAfter.y);
 				if ( elAtPlayer === null ) {
@@ -2151,21 +2220,21 @@
 
 				} else if ( elAtPlayer instanceof Gem ) {
 
-					self.player.gemCount+= elAtPlayer.value;
+					player.gemCount+= elAtPlayer.value;
 					self.deleteElementAtIndex(elIndex);
-					if ( self.player.gemCount >= self.gemTarget ) {
+					if ( player.gemCount >= self.gemTarget ) {
 						// open all doors
 						self.openDoors();
 					}
 					elAtPlayer.playCollectSound();
 
-				} else if ( self.player.substep === 0 && elAtPlayer instanceof Door && elAtPlayer.isOpen ) {
+				} else if ( player.substep === 0 && elAtPlayer instanceof Door && elAtPlayer.isOpen ) {
 					// when player is on the door, he won the game! :p
 
 					// won
 					self.changeState(Game.STATE_WON);
-					self.player.dirX = 0;
-					self.player.dirY = 0;
+					player.dirX = 0;
+					player.dirY = 0;
 					self.audioHandler.stopSequence(AUDIO_BG_MUSIC);
 				}
 
