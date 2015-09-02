@@ -1,3 +1,20 @@
-# js-game-emeralds
-This hopes to be a Emerald Mine clone written in JS.
-Also possibly an entry to [http://js13kgames.com] 2015 if I manage to find a reverse idea... :p
+# Reverse Emerald Mine
+Emerald Mine clone with "Reverse" theme written in JS.
+Entry to [http://js13kgames.com] 2015 :)
+
+
+## Minify Settings
+
+### JS
+`uglifyjs --compress --mangle --mangle-props --mangle-regex="/^_/" --o game.min.js -- game.js`
+
+### ZIP (7Zip)
+ - Compression: Ultra
+ - Mode: PPMd
+ - Dictionary size: 256MB
+ - Word size: 12
+
+### PNG (Gimp)
+
+ - Compression: Best
+ - Image mode: Indexed, optimized palette with max. 255 colors 
