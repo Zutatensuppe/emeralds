@@ -3,16 +3,20 @@
 
 	var VISIBLE_WIDTH = 16;
 	var VISIBLE_HEIGHT = 11;
+	//var VISIBLE_WIDTH = 30;
+	//var VISIBLE_HEIGHT = 24;
 
 	/// 128 TILE SIZE
 
 	var CANVAS_HEIGHT = 768;
 	var CANVAS_WIDTH = 1028;
-	var MAP_SIZE_X = 32;
-	var MAP_SIZE_Y = 24;
+	var MAP_SIZE_X = 40;
+	var MAP_SIZE_Y = 20;
+	//var MAP_SIZE_X = 16;
+	//var MAP_SIZE_Y = 11;
 
-	var TILE_SIZE = CANVAS_HEIGHT/(VISIBLE_HEIGHT+1); //
-	var HALF_TILE_SIZE = TILE_SIZE/2;
+	var TILE_SIZE = CANVAS_HEIGHT/(VISIBLE_HEIGHT+1) | 0; //
+	var HALF_TILE_SIZE = TILE_SIZE/2 | 0;
 
 	var FONT_SIZE = HALF_TILE_SIZE;
 	var HALF_FONT_SIZE = FONT_SIZE/2;
@@ -29,6 +33,7 @@
 	var VK_RIGHT = 39;
 	var VK_DOWN = 40;
 	var VK_E = 69;
+	var VK_G = 71;
 	var VK_M = 77;
 	var VK_O = 79;
 	var VK_P = 80;
@@ -78,6 +83,20 @@
 	var ELEMENT_NULL = 8;
 	var ELEMENT_EXPLOSION = 9;
 
+
+	var ELEMENT_GRASS_BORDER_TOP_LEFT = 20;
+	var ELEMENT_GRASS_BORDER_TOP_RIGHT = 21;
+	var ELEMENT_GRASS_BORDER_BOTTOM_LEFT = 22;
+	var ELEMENT_GRASS_BORDER_BOTTOM_RIGHT = 23;
+	var ELEMENT_LAVA_BORDER_TOP_LEFT = 24;
+	var ELEMENT_LAVA_BORDER_TOP_RIGHT = 25;
+	var ELEMENT_LAVA_BORDER_BOTTOM_LEFT = 26;
+	var ELEMENT_LAVA_BORDER_BOTTOM_RIGHT = 27;
+	var ELEMENT_NULL_BORDER_TOP_LEFT = 28;
+	var ELEMENT_NULL_BORDER_TOP_RIGHT = 29;
+	var ELEMENT_NULL_BORDER_BOTTOM_LEFT = 30;
+	var ELEMENT_NULL_BORDER_BOTTOM_RIGHT = 31;
+
 	var ENEMY_STRIDER = 10;
 	var ENEMY_NIKI = 11;
 
@@ -87,15 +106,17 @@
 	/////////////////////////////////////////////////////////////////
 	var STR_SAVE_MAP = 'Save map';
 	var STR_LOAD_MAP = 'Load map';
-	var STR_MENU_START_RANDOM_GAME = 'SPACE: Start random game';
-	var STR_MENU_EDIT_MAP =          'E:     Edit Map';
-	var STR_MENU_LOAD_MAP =          'L:     Load Map';
+	var STR_MENU_START_RANDOM_GAME = 'Start game';
+	var STR_MENU_EDIT_MAP =          'Edit map';
+	var STR_MENU_LOAD_MAP =          'Load map';
 	var STR_NAME_COLON = 'Name: ';
 	var STR_HINT_COLON = 'Hint: ';
 	var STR_GEMS_COLON = 'Gems: ';
-	var STR_GEM_TARGET_COLON = 'Gem Target: ';
-	var STR_EDIT_HELP_1 = 'X: remove element   E: set element  O: fill map  P: clear map';
-	var STR_EDIT_HELP_2 = 'SPACE: next element  T+Number: gem target  T+T: auto gem target';
+	var STR_GEM_TARGET_COLON = 'Gems: ';
+	var STR_EDIT_HELP_1 = 'Elements:   X=remove  E=set  SPACE=next';
+	var STR_EDIT_HELP_2 = 'Map:        O=fill  P=clear';
+	var STR_EDIT_HELP_3 = 'Gem Target: G+Number+ENTER=set  G+G=autoset';
+	var STR_EDIT_HELP_4 = 'Time Limit: T+Number+ENTER=set (in seconds) T+T=autoset';
 	var STR_STATUS_TEXT_GAMEOVER = 'Game over...';
 	var STR_STATUS_TEXT_WIN = 'A winner is you!';
 	var STR_ERROR_UNABLE_TO_SAVE_MAP = 'Unable to save map.';
@@ -104,6 +125,9 @@
 	var STR_MSG_DOOR_OPENED = 'Door was opened!!';
 
 
+	var MENU_START_GAME = 0;
+	var MENU_LOAD_MAP = 1;
+	var MENU_EDIT_MAP = 2;
 
 
 	/////////////////////////////////////////////////////////////////
@@ -127,89 +151,84 @@
 		this._image.onload = cb;
 		this._image.src = file;
 	}
-	Sprite[PROTO] = {
-		_render: function(screen, sX, sY, sW, sH, dX, dY, dW, dH) {
-			screen.drawImage(this._image, sX, sY, sW, sH, dX, dY, dW, dH );
-		}
+	Sprite[PROTO]._render = function(screen, sX, sY, sW, sH, dX, dY, dW, dH) {
+		screen.drawImage(this._image, sX, sY, sW, sH, dX, dY, dW, dH );
 	};
 
 	function Gfx( sprite, x, y, w, h ) {
 		this._sprite = sprite;
 		this._x = x;
 		this._y = y;
-		this._w = w;
-		this._h = h;
+		this._w = w || SPRITE_TILE_SIZE; // if w is not set, it is defaulted to sprite tile size
+		this._h = h || this._w; // if h is not set, it is the same as w
 	}
-	Gfx[PROTO] = {
-		_render: function(screen, destX, destY, shiftX, shiftY, TS) {
-			var self = this;
-			TS = TS || TILE_SIZE;
-			if ( !shiftX && !shiftY ) {
-				self._sprite._render(screen, self._x, self._y, self._w, self._h, destX, destY, TS, TS);
-				return;
-			}
-			// wrap the sprite image
-
-			shiftX = shiftX || 0;
-			shiftY = shiftY || 0;
-
-			var ratioX = TS / self._w;
-			var ratioY = TS / self._h;
-
-			var w1, w2, h1, h2;
-			if ( shiftX ) {
-				w2 = Math.abs(shiftX);
-				w1 = self._w - w2;
-			} else {
-				w2 = self._w;
-				w1 = self._w;
-			}
-			if ( shiftY ) {
-				h2 = Math.abs(shiftY);
-				h1 = self._h - h2;
-			} else {
-				h2 = self._h;
-				h1 = self._h;
-			}
-
-			// render part 1
-			self._sprite._render(
-				screen,
-				self._x + shiftX,
-				self._y + shiftY,
-				w1,
-				h1,
-				destX,
-				destY,
-				w1*ratioX,
-				h1*ratioY
-			);
-
-			// render part 2
-			self._sprite._render(
-				screen,
-				self._x,
-				self._y,
-				w2,
-				h2,
-				shiftX ? (destX + w1 * ratioX ) : destX,
-				shiftY ? (destY + h1 * ratioY ) : destY,
-				w2*ratioX,
-				h2*ratioY
-			);
-
+	Gfx[PROTO]._render = function(screen, destX, destY, shiftX, shiftY, TS) {
+		var self = this;
+		TS = TS || TILE_SIZE;
+		if ( !shiftX && !shiftY ) {
+			self._sprite._render(screen, self._x, self._y, self._w, self._h, destX, destY, TS, TS);
+			return;
 		}
+		// wrap the sprite image
+
+		shiftX = shiftX || 0;
+		shiftY = shiftY || 0;
+
+		var ratioX = TS / self._w;
+		var ratioY = TS / self._h;
+
+		var w1, w2, h1, h2;
+		if ( shiftX ) {
+			w2 = Math.abs(shiftX);
+			w1 = self._w - w2;
+		} else {
+			w2 = self._w;
+			w1 = self._w;
+		}
+		if ( shiftY ) {
+			h2 = Math.abs(shiftY);
+			h1 = self._h - h2;
+		} else {
+			h2 = self._h;
+			h1 = self._h;
+		}
+
+		// render part 1
+		self._sprite._render(
+			screen,
+			self._x + shiftX,
+			self._y + shiftY,
+			w1,
+			h1,
+			destX,
+			destY,
+			w1*ratioX | 0,
+			h1*ratioY | 0
+		);
+
+		// render part 2
+		self._sprite._render(
+			screen,
+			self._x,
+			self._y,
+			w2,
+			h2,
+			shiftX ? destX + w1 * ratioX | 0 : destX,
+			shiftY ? destY + h1 * ratioY | 0 : destY,
+			Math.ceil(w2*ratioX),
+			Math.ceil(h2*ratioY)
+		);
+
 	};
 
 	function Font( sprite ) {
 		this._letters = ''+
-			'abcdefg'+
-			'hijklmn'+
-			'opqrstu'+
-			'vwxyz?!'+
-			':,.1234'+
-			'567890/'+
-			'+"';
+			'abcdefgh'+
+			'ijklmnop'+
+			'qrstuvwx'+
+			'yz?!:,.1'+
+			'23456789'+
+			'0/+"_()=';
 		this._sprite = sprite;
 		// left upper corner of "letter" block in sprite
 		this._x = 64;
@@ -236,9 +255,9 @@
 					// found the letter
 					self._sprite._render(
 						screen,
-						// 7 letters per col
-						self._x + ((letterIdx/7) | 0)*8,
-						self._y + (letterIdx%7)*8,
+						// 8 letters per col
+						self._x + (letterIdx/8 | 0)*8,
+						self._y + (letterIdx%8)*8,
 						SPRITE_FONT_SIZE,
 						SPRITE_FONT_SIZE,
 						_x,
@@ -612,11 +631,11 @@
 		self._substep = 0; // max TILE_SIZE/this.speed
 		self._gemCount = 0;
 
-		self._gfx = new Gfx(g._sprite, 16, 16, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE);
-		self._gfxRight = [new Gfx(g._sprite, 32, 16, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE), new Gfx(g._sprite, 16, 32, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE)];
-		self._gfxLeft = [new Gfx(g._sprite, 0, 32, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE), new Gfx(g._sprite, 0, 48, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE)];
-		self._gfxDown = [new Gfx(g._sprite, 16, 48, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE), new Gfx(g._sprite, 16, 64, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE)];
-		self._gfxUp = [new Gfx(g._sprite, 0, 80, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE), new Gfx(g._sprite, 16, 80, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE)];
+		self._gfx = new Gfx(g._sprite, 16, 16);
+		self._gfxLeft = [new Gfx(g._sprite, 0, 32), new Gfx(g._sprite, 16, 32)];
+		self._gfxRight = [new Gfx(g._sprite, 0, 48), new Gfx(g._sprite, 16, 48)];
+		self._gfxDown = [new Gfx(g._sprite, 0, 64), new Gfx(g._sprite, 16, 64)];
+		self._gfxUp = [new Gfx(g._sprite, 0, 80), new Gfx(g._sprite, 16, 80)];
 	}
 	Player[PROTO] = Object.create(Entity[PROTO]);
 	Player[PROTO][CONSTRUCTOR] = Player;
@@ -827,20 +846,20 @@
 					self._dirY = -1;
 					self._dir = 0;
 				} else {
-					// if there is an element top:
+					// if there is an element bottom:
 					nextEl = self._game._getElementAtPos(pos.x, pos.y+1);
 					if ( typeof nextEl === UNDEF || nextEl !== null ) {
 						// dir right and turn left
 						self._dirY = 0;
-						self._dirX = -1;
+						self._dirX = 1;
 						self._dir = 1;
 					} else {
-						// if there is an element bottom:
+						// if there is an element top:
 						nextEl = self._game._getElementAtPos(pos.x, pos.y-1);
 						if ( typeof nextEl === UNDEF || nextEl !== null ) {
 							// dir left and turn left
 							self._dirY = 0;
-							self._dirX = -1;
+							self._dirX = 1;
 							self._dir = 0;
 						}
 					}
@@ -1042,7 +1061,7 @@
 	===============================================================*/
 	function Explosion(g, x, y) {
 		var self = this;
-		Entity[PROTO][CONSTRUCTOR].call(self, g, new Gfx(g._sprite, 48, 0, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE), x, y, TILE_SIZE, TILE_SIZE);
+		Entity[PROTO][CONSTRUCTOR].call(self, g, g._elementGraphics[ELEMENT_EXPLOSION], x, y, TILE_SIZE, TILE_SIZE);
 		self._isWalkable = true;
 		self._ticktick = 10;
 		self._isDeadly = true;
@@ -1094,7 +1113,7 @@
 		self._stepsPerTile = TILE_SIZE/OBJECT_SPEED;
 
 		self._gfx = g._elementGraphics[ELEMENT_DOOR];
-		self._gfxOpen = [new Gfx(self._game._sprite, 32, 48, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE), new Gfx(self._game._sprite, 32, 64, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE)];
+		self._gfxOpen = [new Gfx(self._game._sprite, 32, 48), new Gfx(self._game._sprite, 32, 64)];
 	}
 	Door[PROTO] = ObjCreate(Entity[PROTO]);
 	Door[PROTO][CONSTRUCTOR] = Door;
@@ -1150,6 +1169,7 @@
 		self._ticks = 0;
 
 		self._startTime = 0;
+		self._timeLimit = 0;
 		self._renderStartX = 0;
 		self._renderStartY = 0;
 
@@ -1165,8 +1185,10 @@
 		self._prevState = null;
 		self._state = Game._STATE_INIT;
 
-
+		self._menuCurrent = MENU_START_GAME;
 		self._editAwaitingGemTarget = false;
+		self._editAwaitingTimeLimitTarget = false;
+
 		self._editCurrentMapName = '';
 		self._loadSaveMapHint = false;
 		self._editCurrentElement = ELEMENT_GRASS;
@@ -1186,10 +1208,11 @@
 		self._elementGraphics = [];
 
 		self._sprite = new Sprite('sprites.png', function() {
-			self._changeState(Game._STATE_MENU);
-			self.font = new Font(self._sprite);
 
+			self.font = new Font(self._sprite);
 			self._initGraphics();
+
+			self._startMenu();
 		}); // load sprite
 		self._initAudio();
 
@@ -1427,17 +1450,40 @@
 		_initGraphics: function() {
 			var self = this;
 			self._elementGraphics = {};
-			self._elementGraphics[ELEMENT_GRASS] = new Gfx(self._sprite, 16, 0, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE);
-			self._elementGraphics[ELEMENT_STONE] = new Gfx(self._sprite, 0, 0, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE);
-			self._elementGraphics[ELEMENT_BOMB] = new Gfx(self._sprite, 32, 0, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE);
-			self._elementGraphics[ELEMENT_EMERALD] = new Gfx(self._sprite, 0, 16, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE);
-			self._elementGraphics[ELEMENT_RUBY] = new Gfx(self._sprite, 0, 64, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE);
-			self._elementGraphics[ELEMENT_LAVA] = new Gfx(self._sprite, 48, 64, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE);
-			self._elementGraphics[ELEMENT_DOOR] = new Gfx(self._sprite, 32, 32, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE);
-			self._elementGraphics[ELEMENT_WALL] = new Gfx(self._sprite, 32, 80, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE);
+			self._elementGraphics[ELEMENT_EMERALD] = new Gfx(self._sprite, 0, 0);
+			self._elementGraphics[ELEMENT_STONE] = new Gfx(self._sprite, 16, 0);
+			self._elementGraphics[ELEMENT_BOMB] = new Gfx(self._sprite, 32, 0);
+			self._elementGraphics[ELEMENT_EXPLOSION] = new Gfx(self._sprite, 48, 0);
 
-			self._elementGraphics[ENEMY_STRIDER] = new Gfx(self._sprite, 48, 80, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE);
-			self._elementGraphics[ENEMY_NIKI] = new Gfx(self._sprite, 64, 64, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE);
+			self._elementGraphics[ELEMENT_RUBY] = new Gfx(self._sprite, 0, 16);
+
+			self._elementGraphics[ELEMENT_DOOR] = new Gfx(self._sprite, 32, 32);
+
+			self._elementGraphics[ELEMENT_WALL] = new Gfx(self._sprite, 32, 80);
+
+			self._elementGraphics[ENEMY_STRIDER] = new Gfx(self._sprite, 96, 80);
+			self._elementGraphics[ENEMY_NIKI] = new Gfx(self._sprite, 80, 80);
+
+
+			self._elementGraphics[ELEMENT_GRASS] = new Gfx(self._sprite, 48, 80);
+			self._elementGraphics[ELEMENT_GRASS_BORDER_TOP_LEFT] = new Gfx(self._sprite, 64, 80, SPRITE_TILE_SIZE/2);
+			self._elementGraphics[ELEMENT_GRASS_BORDER_TOP_RIGHT] = new Gfx(self._sprite, 72, 80, SPRITE_TILE_SIZE/2);
+			self._elementGraphics[ELEMENT_GRASS_BORDER_BOTTOM_LEFT] = new Gfx(self._sprite, 64, 88, SPRITE_TILE_SIZE/2);
+			self._elementGraphics[ELEMENT_GRASS_BORDER_BOTTOM_RIGHT] = new Gfx(self._sprite, 72, 88, SPRITE_TILE_SIZE/2);
+
+
+			self._elementGraphics[ELEMENT_LAVA] = new Gfx(self._sprite, 80, 64);
+			self._elementGraphics[ELEMENT_LAVA_BORDER_TOP_LEFT] = new Gfx(self._sprite, 96, 64, SPRITE_TILE_SIZE/2);
+			self._elementGraphics[ELEMENT_LAVA_BORDER_TOP_RIGHT] = new Gfx(self._sprite, 102, 64, SPRITE_TILE_SIZE/2);
+			self._elementGraphics[ELEMENT_LAVA_BORDER_BOTTOM_LEFT] = new Gfx(self._sprite, 96, 72, SPRITE_TILE_SIZE/2);
+			self._elementGraphics[ELEMENT_LAVA_BORDER_BOTTOM_RIGHT] = new Gfx(self._sprite, 102, 72, SPRITE_TILE_SIZE/2);
+
+			self._elementGraphics[ELEMENT_NULL] = new Gfx(self._sprite, 48, 64);
+			self._elementGraphics[ELEMENT_NULL_BORDER_TOP_LEFT] = new Gfx(self._sprite, 64, 64, SPRITE_TILE_SIZE/2);
+			self._elementGraphics[ELEMENT_NULL_BORDER_TOP_RIGHT] = new Gfx(self._sprite, 72, 64, SPRITE_TILE_SIZE/2);
+			self._elementGraphics[ELEMENT_NULL_BORDER_BOTTOM_LEFT] = new Gfx(self._sprite, 64, 72, SPRITE_TILE_SIZE/2);
+			self._elementGraphics[ELEMENT_NULL_BORDER_BOTTOM_RIGHT] = new Gfx(self._sprite, 72, 72, SPRITE_TILE_SIZE/2);
+
 		},
 		_changeState: function( toState ) {
 			var self = this;
@@ -1455,41 +1501,62 @@
 			var obj = {
 				map: [],
 				gemTarget: 0,
-				playerX: 0,
-				playerY: 0
+				timeLimit: 0,
+				playerX: 1,
+				playerY: 1
 			};
 
 			var perc = [
-				//[1,ELEMENT_RUBY],
-				//[20,ELEMENT_NULL],
-				//[2,ELEMENT_BOMB],
-				//[6,ELEMENT_EMERALD],
-				//[5,ELEMENT_STONE],
+				[1,ELEMENT_RUBY],
+				[20,ELEMENT_NULL],
+				[2,ELEMENT_BOMB],
+				[6,ELEMENT_EMERALD],
+				[5,ELEMENT_STONE],
 				[20,ELEMENT_GRASS],
-				//[20,ELEMENT_LAVA],
+				[20,ELEMENT_LAVA],
 				//[10,ELEMENT_WALL],
 				//[1,ENEMY_NIKI],
 				//[1,ENEMY_STRIDER]
 			];
 
 
-			obj.map.push(ELEMENT_GRASS);
-
 			var max = 0;
 			perc.forEach(function(item) {
 				max+=item[0];
 			});
-			for ( var i = 1; i < MAP_SIZE_Y*MAP_SIZE_X; i++ ) {
+			var mapString = '';
+			for ( var i = 0; i < MAP_SIZE_Y*MAP_SIZE_X; i++ ) {
+				// border becomes wall tiles
+				if ( i < MAP_SIZE_X
+					|| i >= MAP_SIZE_Y*MAP_SIZE_X-MAP_SIZE_X
+					|| (i+1)%MAP_SIZE_X === 0
+					|| i%MAP_SIZE_X === 0 ) {
+					mapString+= ELEMENT_WALL;
+					obj.map.push(ELEMENT_WALL);
+					if ( (i+1)%MAP_SIZE_X === 0 ) {
+						mapString+= "\n";
+					}
+					continue;
+				}
+				var did = false;
 				// grass at player pos
 				var rnd = Math.random()*max+1 | 0;
 				for ( var j = 0, cur = 0; j < perc.length; j++ ) {
 					cur+= perc[j][0];
 					if ( rnd < cur ) {
+						mapString+=(perc[j][1]);
 						obj.map.push(perc[j][1]);
+						did = true;
 						break;
 					}
 				}
+
+				if ( !did ){
+					obj.map.push(ELEMENT_NULL);
+					mapString+=ELEMENT_NULL;
+				}
 			}
+			console.log(mapString);
 
 			// generate a door at a random position
 			var rand = Math.random()*MAP_SIZE_X*MAP_SIZE_Y | 0;
@@ -1498,6 +1565,7 @@
 			this._readMap(obj);
 
 			this._gemTarget = (this._gemCount * 0.75) | 0;
+			this._timeLimit = 300; // set to some minutes by default
 
 		},
 		_readMap: function(obj) {
@@ -1506,14 +1574,16 @@
 			self._elements = [];
 			self._rElements = [];
 			self._gemCount = 0;
+			self._isReversed = false;
 
 			obj.map.forEach(function(item, i) {
 				self._elements.push(null);
 				self._rElements.push(null);
-				self.__setElementAtIndexByCode(i, obj.map[i]);
+				self._setElementAtIndexByCode(i, obj.map[i]);
 			});
 
 			self._gemTarget = obj.gemTarget || self._gemCount;
+			self._timeLimit = obj.timeLimit || 0;
 			self._player = new Player(self, obj.playerX*TILE_SIZE, obj.playerY*TILE_SIZE);
 		},
 		_loadMap: function(mapName) {
@@ -1540,15 +1610,20 @@
 				// note: _elements.map = function. not a map of self game
 				map: map,
 				gemTarget: self._gemTarget,
+				timeLimit: self._timeLimit,
 				playerX: pos.x,
 				playerY: pos.y
 			}));
 			return true;
 		},
-		__setElementAtIndexByCode: function(idx, elCode, remvoveEnemy) {
+		_setElementAtIndexByCode: function(idx, elCode, remvoveEnemy) {
 			this._setElementAtIndex(
 				idx,
-				this._elementCodeToElement(elCode, (idx%MAP_SIZE_X) * TILE_SIZE, parseInt(idx/MAP_SIZE_X, 10) * TILE_SIZE),
+				this._elementCodeToElement(
+					elCode,
+					(idx%MAP_SIZE_X) * TILE_SIZE,
+					parseInt(idx/MAP_SIZE_X, 10) * TILE_SIZE
+				),
 				remvoveEnemy
 			);
 		},
@@ -1734,32 +1809,33 @@
 			return ret;
 		},
 
+		_determineRenderStart: function() {
+			var self = this;
+			if ( self._player ) {
+				self._renderStartX = self._player._x - VISIBLE_WIDTH*HALF_TILE_SIZE;
+				self._renderStartY = self._player._y - VISIBLE_HEIGHT*HALF_TILE_SIZE;
+				if ( self._renderStartX < 0 ) {
+					self._renderStartX = 0;
+				}
+				if ( self._renderStartY < 0 ) {
+					self._renderStartY = 0;
+				}
+				if ( self._renderStartX+VISIBLE_WIDTH*TILE_SIZE > MAP_SIZE_X*TILE_SIZE ) {
+					self._renderStartX = MAP_SIZE_X*TILE_SIZE - VISIBLE_WIDTH*TILE_SIZE;
+				}
+				if ( self._renderStartY+VISIBLE_HEIGHT*TILE_SIZE > MAP_SIZE_Y*TILE_SIZE ) {
+					self._renderStartY = MAP_SIZE_Y*TILE_SIZE - VISIBLE_HEIGHT*TILE_SIZE;
+				}
+			}
+		},
+
 		_drawBackground: function() {
 			var self = this;
 			var i;
 			self._context.fillStyle = '#000';
 			self._context.fillRect(0,0, self._canvas.width, self._canvas.height);
 
-			if ( self._state === Game._STATE_EDIT ) {
-
-				// draw grid lines
-				self._context.strokeStyle = '#555';
-				// draw with offset of the player!
-				for ( i = TILE_SIZE-self._renderStartX; i < self._canvas.width+self._renderStartX; i+=TILE_SIZE ) {
-					self._context.beginPath();
-					self._context.moveTo(i, 0);
-					self._context.lineTo(i, self._canvas.height);
-					self._context.stroke();
-					self._context.closePath();
-				}
-
-				for ( i = TILE_SIZE-self._renderStartY; i < self._canvas.height+self._renderStartY; i+=TILE_SIZE ) {
-					self._context.beginPath();
-					self._context.moveTo(0, i);
-					self._context.lineTo(self._canvas.width, i);
-					self._context.stroke();
-				}
-			}
+			self._determineRenderStart();
 		},
 		_handleInput: function(){
 			var self = this;
@@ -1770,16 +1846,32 @@
 			/* MENU
 			=========================================================================== */
 			if ( self._state === Game._STATE_MENU ) {
-				if ( self._inputHandler._isPressed(VK_E) ) {
-					// go to edit mode
-					self._startEdit();
 
-				} else if ( self._inputHandler._isPressed(VK_SPACE) ) {
+				if ( self._inputHandler._isPressed(VK_RETURN) ) {
+					switch ( self._menuCurrent ) {
+						case MENU_START_GAME: self._start(); break;
+						case MENU_EDIT_MAP: self._startEdit(); break;
+						case MENU_LOAD_MAP:
+							self._changeState(Game._STATE_LOADMAP);
+							break;
+					}
+				}
+
+				if ( self._inputHandler._isPressed(VK_UP) ) {
+					self._menuCurrent = self._menuCurrent === 0 ? 2 : self._menuCurrent-1;
+				}
+				if ( self._inputHandler._isPressed(VK_DOWN) ) {
+					self._menuCurrent = self._menuCurrent === 2 ? 0 : self._menuCurrent+1;
+				}
+
+				if ( self._inputHandler._isPressed(VK_S) ) {
 					self._start();
-				} else if ( self._inputHandler._isPressed(VK_L) ) {
-					// save map
+				}
+				if ( self._inputHandler._isPressed(VK_E) ) {
+					self._startEdit();
+				}
+				if ( self._inputHandler._isPressed(VK_L) ) {
 					self._changeState(Game._STATE_LOADMAP);
-					self._editCurrentMapName = '';
 				}
 
 			}
@@ -1822,7 +1914,7 @@
 					if ( self._prevState === Game._STATE_EDIT ) {
 						self._changeState(Game._STATE_EDIT);
 					} else {
-						self._changeState(Game._STATE_MENU);
+						self._startMenu();
 					}
 				}
 
@@ -1883,7 +1975,7 @@
 					for ( i = 0; i < MAP_SIZE_Y*MAP_SIZE_X; i++ ) {
 						self._elements.push(null);
 						self._rElements.push(null);
-						self.__setElementAtIndexByCode(i, self._allEditElements[self._editCurrentElement], 1);
+						self._setElementAtIndexByCode(i, self._allEditElements[self._editCurrentElement], 1);
 					}
 
 				}
@@ -1896,7 +1988,7 @@
 					for ( i = 0; i < MAP_SIZE_Y*MAP_SIZE_X; i++ ) {
 						self._elements.push(null);
 						self._rElements.push(null);
-						self.__setElementAtIndexByCode(i, ELEMENT_NULL, 1);
+						self._setElementAtIndexByCode(i, ELEMENT_NULL, 1);
 					}
 				}
 
@@ -1907,6 +1999,29 @@
 				}
 
 				if ( self._inputHandler._isPressed(VK_T) ) {
+					if ( self._editAwaitingTimeLimitTarget !== false ) {
+						self._editAwaitingTimeLimitTarget = false;
+						self._timeLimit = 300;
+					} else {
+						// awaiting target gem number
+						self._editAwaitingTimeLimitTarget = '';
+						self._timeLimit = 0;
+					}
+				}
+				if ( self._editAwaitingTimeLimitTarget !== false ) {
+					for ( i = 48; i < 58; i++ ) {
+						// input numbers
+						if ( self._inputHandler._isPressed(i) ) {
+							self._editAwaitingTimeLimitTarget+=''+String.fromCharCode(i);
+							self._timeLimit = Number(self._editAwaitingTimeLimitTarget);
+						}
+					}
+					if ( self._inputHandler._isPressed(VK_RETURN) ) {
+						self._editAwaitingTimeLimitTarget = false;
+					}
+				}
+
+				if ( self._inputHandler._isPressed(VK_G) ) {
 					if ( self._editAwaitingGemTarget !== false ) {
 						self._editAwaitingGemTarget = false;
 						self._gemTarget = self._calcGemTarget();
@@ -1931,7 +2046,7 @@
 
 				if ( self._inputHandler._isDown(VK_E) ) {
 					var pos = self._player._getActualPosition();
-					self.__setElementAtIndexByCode(pos.y*MAP_SIZE_X+pos.x, self._allEditElements[self._editCurrentElement], 1);
+					self._setElementAtIndexByCode(pos.y*MAP_SIZE_X+pos.x, self._allEditElements[self._editCurrentElement], 1);
 				}
 
 				if ( self._inputHandler._isDown(VK_X) ) {
@@ -1978,7 +2093,7 @@
 				if ( self._inputHandler._isPressed(VK_ESCAPE) ) {
 					// go to menu for now. later maybe add pause.
 					self._audioHandler._stopSequence(AUDIO_BG_MUSIC);
-					self._changeState(Game._STATE_MENU);
+					self._startMenu();
 				}
 
 			}
@@ -2010,8 +2125,7 @@
 
 				if ( self._inputHandler._isPressed(VK_ESCAPE) ) {
 					// go to menu for now. later maybe add pause.
-					self._audioHandler._stopSequence(AUDIO_BG_MUSIC);
-					self._changeState(Game._STATE_MENU);
+					self._startMenu();
 				}
 
 			}
@@ -2022,8 +2136,7 @@
 
 				if ( self._inputHandler._isPressed(VK_ESCAPE) ) {
 					// go to menu for now. later maybe add pause.
-					self._audioHandler._stopSequence(AUDIO_BG_MUSIC);
-					self._changeState(Game._STATE_MENU);
+					self._startMenu();
 				}
 
 			}
@@ -2068,7 +2181,7 @@
 			}
 
 			// add explosion entity at the place
-			self.__setElementAtIndexByCode(y*MAP_SIZE_X+x, ELEMENT_EXPLOSION);
+			self._setElementAtIndexByCode(y*MAP_SIZE_X+x, ELEMENT_EXPLOSION);
 
 		},
 
@@ -2078,7 +2191,7 @@
 			var self = this;
 
 			// set desired place to explosion
-			self.__setElementAtIndexByCode(py*MAP_SIZE_X+px, ELEMENT_EXPLOSION);
+			self._setElementAtIndexByCode(py*MAP_SIZE_X+px, ELEMENT_EXPLOSION);
 
 
 			// set surrounding places to explosions (maybe)
@@ -2124,6 +2237,18 @@
 			// then move the enemies and elements
 
 			if ( self._state === Game._STATE_GAME ) {
+
+				//check timer
+				var timeNow = new Date().getTime();
+				var timeElapsed = (0.5+(timeNow - self._startTime)/1000) | 0;
+				if ( self._timeLimit && self._timeLimit <= timeElapsed ) {
+					// time is up
+					self._changeState(Game._STATE_GAMEOVER);
+					self._audioHandler._stopSequence(AUDIO_BG_MUSIC);
+					self._audioHandler.play(AUDIO_DEATH);
+					//self._audioHandler._playSequence('deathsong');
+					return;
+				}
 
 				// move enemies
 				self._enemies.forEach(function(enemy) {
@@ -2312,24 +2437,18 @@
 		},
 		_drawElements: function() {
 			var self=  this;
-
-			self._renderStartX = self._player._x - VISIBLE_WIDTH*HALF_TILE_SIZE;
-			self._renderStartY = self._player._y - VISIBLE_HEIGHT*HALF_TILE_SIZE;
-			if ( self._renderStartX < 0 ) {
-				self._renderStartX = 0;
-			}
-			if ( self._renderStartY < 0 ) {
-				self._renderStartY = 0;
-			}
-			if ( self._renderStartX+VISIBLE_WIDTH*TILE_SIZE > MAP_SIZE_X*TILE_SIZE ) {
-				self._renderStartX = MAP_SIZE_X*TILE_SIZE - VISIBLE_WIDTH*TILE_SIZE;
-			}
-			if ( self._renderStartY+VISIBLE_HEIGHT*TILE_SIZE > MAP_SIZE_Y*TILE_SIZE ) {
-				self._renderStartY = MAP_SIZE_Y*TILE_SIZE - VISIBLE_HEIGHT*TILE_SIZE;
-			}
+			self._determineRenderStart();
 
 			var elementsToRender = self._isReversed ? self._rElements : self._elements;
-			elementsToRender.forEach(function(item) {
+			elementsToRender.forEach(function(item, idx) {
+				// item background:
+				self._elementGraphics[ELEMENT_NULL]._render(
+					self._context,
+					(idx%MAP_SIZE_X) * TILE_SIZE - self._renderStartX,
+					(idx/MAP_SIZE_X | 0) * TILE_SIZE - self._renderStartY
+				);
+			});
+			elementsToRender.forEach(function(item, idx) {
 				if ( item === null
 					|| item._x < self._renderStartX-TILE_SIZE
 					|| item._x > self._renderStartX+VISIBLE_WIDTH*TILE_SIZE + TILE_SIZE
@@ -2339,19 +2458,174 @@
 					) {
 					return;
 				}
-
 				item._render(self._context);
-
 			});
+
+			// render borders....
+			/*
+			elementsToRender.forEach(function(item, idx) {
+				var x,y;
+				if ( item === null ) {
+					x = idx%MAP_SIZE_X;
+					y = idx/MAP_SIZE_X | 0;
+				} else {
+					var pos = item._getActualPosition();
+					x = pos.x;
+					y = pos.y;
+				}
+				// check borders
+				var l = self._getElementAtPos(x-1, y); // left
+				var t = self._getElementAtPos(x, y-1); // top
+				var r = self._getElementAtPos(x+1, y); // right
+				var b = self._getElementAtPos(x, y+1); // bottom
+
+				var tl = self._getElementAtPos(x-1, y-1); // top left
+				var tr = self._getElementAtPos(x+1, y-1); // top right
+				var bl = self._getElementAtPos(x-1, y+1); // bottom left
+				var br = self._getElementAtPos(x+1, y+1); // bottom right
+
+				//ELEMENT_GRASS_BORDER_TOP_LEFT
+				//ELEMENT_GRASS_BORDER_TOP_RIGHT
+				//ELEMENT_GRASS_BORDER_BOTTOM_LEFT
+				//ELEMENT_GRASS_BORDER_BOTTOM_RIGHT
+				if ( t instanceof Grass ) {
+					if ( l instanceof Grass && tl instanceof Grass ) {
+						// draw top left border
+
+						self._elementGraphics[ELEMENT_GRASS_BORDER_TOP_LEFT]._render(
+							self._context,
+							(idx%MAP_SIZE_X) * TILE_SIZE - self._renderStartX,
+							(idx/MAP_SIZE_X | 0) * TILE_SIZE - self._renderStartY,
+							0,0, HALF_TILE_SIZE
+						);
+					}
+					if ( r instanceof Grass && tr instanceof Grass ) {
+						// draw top right border
+						self._elementGraphics[ELEMENT_GRASS_BORDER_TOP_RIGHT]._render(
+							self._context,
+							(idx%MAP_SIZE_X) * TILE_SIZE - self._renderStartX + HALF_TILE_SIZE,
+							(idx/MAP_SIZE_X | 0) * TILE_SIZE - self._renderStartY,
+							0,0, HALF_TILE_SIZE
+						);
+					}
+				}
+				if ( b instanceof Grass ) {
+					if ( l instanceof Grass && bl instanceof Grass ) {
+						// draw bottom left border
+						self._elementGraphics[ELEMENT_GRASS_BORDER_BOTTOM_LEFT]._render(
+							self._context,
+							(idx%MAP_SIZE_X) * TILE_SIZE - self._renderStartX,
+							(idx/MAP_SIZE_X | 0) * TILE_SIZE - self._renderStartY + HALF_TILE_SIZE,
+							0,0, HALF_TILE_SIZE
+						);
+					}
+					if ( r instanceof Grass && br instanceof Grass ) {
+						// draw bottom right border
+						self._elementGraphics[ELEMENT_GRASS_BORDER_BOTTOM_RIGHT]._render(
+							self._context,
+							(idx%MAP_SIZE_X) * TILE_SIZE - self._renderStartX + HALF_TILE_SIZE,
+							(idx/MAP_SIZE_X | 0) * TILE_SIZE - self._renderStartY + HALF_TILE_SIZE,
+							0,0, HALF_TILE_SIZE
+						);
+					}
+				}
+
+
+				if ( t instanceof Lava ) {
+					if ( l instanceof Lava && tl instanceof Lava ) {
+						// draw top left border
+
+						self._elementGraphics[ELEMENT_LAVA_BORDER_TOP_LEFT]._render(
+							self._context,
+							(idx%MAP_SIZE_X) * TILE_SIZE - self._renderStartX,
+							(idx/MAP_SIZE_X | 0) * TILE_SIZE - self._renderStartY,
+							0,0, HALF_TILE_SIZE
+						);
+					}
+					if ( r instanceof Lava && tr instanceof Lava ) {
+						// draw top right border
+						self._elementGraphics[ELEMENT_LAVA_BORDER_TOP_RIGHT]._render(
+							self._context,
+							(idx%MAP_SIZE_X) * TILE_SIZE - self._renderStartX + HALF_TILE_SIZE,
+							(idx/MAP_SIZE_X | 0) * TILE_SIZE - self._renderStartY,
+							0,0, HALF_TILE_SIZE
+						);
+					}
+				}
+				if ( b instanceof Lava ) {
+					if ( l instanceof Lava && bl instanceof Lava ) {
+						// draw bottom left border
+						self._elementGraphics[ELEMENT_LAVA_BORDER_BOTTOM_LEFT]._render(
+							self._context,
+							(idx%MAP_SIZE_X) * TILE_SIZE - self._renderStartX,
+							(idx/MAP_SIZE_X | 0) * TILE_SIZE - self._renderStartY + HALF_TILE_SIZE,
+							0,0, HALF_TILE_SIZE
+						);
+					}
+					if ( r instanceof Lava && br instanceof Lava ) {
+						// draw bottom right border
+						self._elementGraphics[ELEMENT_LAVA_BORDER_BOTTOM_RIGHT]._render(
+							self._context,
+							(idx%MAP_SIZE_X) * TILE_SIZE - self._renderStartX + HALF_TILE_SIZE,
+							(idx/MAP_SIZE_X | 0) * TILE_SIZE - self._renderStartY + HALF_TILE_SIZE,
+							0,0, HALF_TILE_SIZE
+						);
+					}
+				}
+
+
+				if ( typeof t !== UNDEF && !(t instanceof Lava || t instanceof Grass || t instanceof Wall ) ) {
+					if ( typeof l !== UNDEF && !(l instanceof Lava || l instanceof Grass || l instanceof Wall ) ) {
+						// draw top left border
+
+						self._elementGraphics[ELEMENT_NULL_BORDER_TOP_LEFT]._render(
+							self._context,
+							(idx%MAP_SIZE_X) * TILE_SIZE - self._renderStartX,
+							(idx/MAP_SIZE_X | 0) * TILE_SIZE - self._renderStartY,
+							0,0, HALF_TILE_SIZE
+						);
+					}
+					if ( typeof r !== UNDEF && !(r instanceof Lava || r instanceof Grass || r instanceof Wall ) ) {
+						// draw top right border
+						self._elementGraphics[ELEMENT_NULL_BORDER_TOP_RIGHT]._render(
+							self._context,
+							(idx%MAP_SIZE_X) * TILE_SIZE - self._renderStartX + HALF_TILE_SIZE,
+							(idx/MAP_SIZE_X | 0) * TILE_SIZE - self._renderStartY,
+							0,0, HALF_TILE_SIZE
+						);
+					}
+				}
+				if ( typeof t !== UNDEF && ! (b instanceof Lava || b instanceof Grass || t instanceof Wall ) ) {
+					if ( typeof l !== UNDEF && !(l instanceof Lava || l instanceof Grass || l instanceof Wall ) ) {
+						// draw bottom left border
+						self._elementGraphics[ELEMENT_NULL_BORDER_BOTTOM_LEFT]._render(
+							self._context,
+							(idx%MAP_SIZE_X) * TILE_SIZE - self._renderStartX,
+							(idx/MAP_SIZE_X | 0) * TILE_SIZE - self._renderStartY + HALF_TILE_SIZE,
+							0,0, HALF_TILE_SIZE
+						);
+					}
+					if ( typeof r !== UNDEF && !(r instanceof Lava || r instanceof Grass || r instanceof Wall ) ) {
+						// draw bottom right border
+						self._elementGraphics[ELEMENT_NULL_BORDER_BOTTOM_RIGHT]._render(
+							self._context,
+							(idx%MAP_SIZE_X) * TILE_SIZE - self._renderStartX + HALF_TILE_SIZE,
+							(idx/MAP_SIZE_X | 0) * TILE_SIZE - self._renderStartY + HALF_TILE_SIZE,
+							0,0, HALF_TILE_SIZE
+						);
+					}
+				}
+			});
+			*/
 		},
 
 		_drawHud: function() {
 			var self = this;
 
 
-			var hudRightElement = new Gfx(self._sprite, 48, 16, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE);
-			var hudLeftElement = new Gfx(self._sprite, 48, 48, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE);
-			var hudCenterElement = new Gfx(self._sprite, 48, 32, SPRITE_TILE_SIZE, SPRITE_TILE_SIZE);
+			var hudRightElement = new Gfx(self._sprite, 48, 16);
+			var hudLeftElement = new Gfx(self._sprite, 48, 48);
+			var hudCenterElement = new Gfx(self._sprite, 48, 32);
 
 			for ( var i = 1; i < VISIBLE_WIDTH-1; i++ ) {
 				hudCenterElement._render(self._context, i*TILE_SIZE, VISIBLE_HEIGHT*TILE_SIZE);
@@ -2383,15 +2657,29 @@
 					self._context,
 					STR_EDIT_HELP_1,
 					HALF_FONT_SIZE,
-					VISIBLE_HEIGHT*TILE_SIZE-FONT_SIZE-HALF_FONT_SIZE,
-					16 // smaller font
+					VISIBLE_HEIGHT*TILE_SIZE-FONT_SIZE-FONT_SIZE,
+					8 // smaller font
 				);
 				self.font._renderText(
 					self._context,
 					STR_EDIT_HELP_2,
 					HALF_FONT_SIZE,
-					VISIBLE_HEIGHT*TILE_SIZE-FONT_SIZE-HALF_FONT_SIZE+24,
-					16 // smaller font
+					VISIBLE_HEIGHT*TILE_SIZE-FONT_SIZE-FONT_SIZE+16,
+					8 // smaller font
+				);
+				self.font._renderText(
+					self._context,
+					STR_EDIT_HELP_3,
+					HALF_FONT_SIZE,
+					VISIBLE_HEIGHT*TILE_SIZE-FONT_SIZE-FONT_SIZE+32,
+					8 // smaller font
+				);
+				self.font._renderText(
+					self._context,
+					STR_EDIT_HELP_4,
+					HALF_FONT_SIZE,
+					VISIBLE_HEIGHT*TILE_SIZE-FONT_SIZE-FONT_SIZE+48,
+					8 // smaller font
 				);
 
 
@@ -2409,6 +2697,16 @@
 
 				});
 
+				var dValue = self._timeLimit;
+				var s = dValue%60;
+				var timeText = (dValue/60 | 0)+':'+(s > 9 ? s : '0'+s);
+				self.font._renderText(
+					self._context,
+					timeText,
+					VISIBLE_WIDTH*TILE_SIZE - timeText.length * FONT_SIZE - HALF_FONT_SIZE,
+					VISIBLE_HEIGHT*TILE_SIZE + HALF_TILE_SIZE - HALF_FONT_SIZE
+				);
+
 			}
 
 			self.font._renderText(
@@ -2420,8 +2718,10 @@
 
 			if ( self._state === Game._STATE_GAME || self._state === Game._STATE_GAMEOVER || self._state === Game._STATE_WON ) {
 
-				var s = timeElapsed%60;
-				var timeText = (timeElapsed/60 | 0)+':'+(s > 9 ? s : '0'+s);
+
+				var dValue = self._timeLimit > 0 ? self._timeLimit - timeElapsed%60 : timeElapsed%60;
+				var s = dValue%60;
+				var timeText = (dValue/60 | 0)+':'+(s > 9 ? s : '0'+s);
 				self.font._renderText(
 					self._context,
 					timeText,
@@ -2442,13 +2742,23 @@
 		},
 
 		_drawMenu: function() {
+
 			var self = this;
-			var y = 50;
-			self.font._renderText(self._context, STR_MENU_START_RANDOM_GAME, 50, y);
-			y+=FONT_SIZE+HALF_FONT_SIZE;
-			self.font._renderText(self._context, STR_MENU_LOAD_MAP, 50, y);
-			y+=FONT_SIZE+HALF_FONT_SIZE;
-			self.font._renderText(self._context, STR_MENU_EDIT_MAP, 50, y);
+			var y = TILE_SIZE+HALF_TILE_SIZE;
+			self.font._renderText(self._context, 'Rev. Emerald Mine', TILE_SIZE+HALF_TILE_SIZE, y, TILE_SIZE *.75);
+			y+=TILE_SIZE+HALF_TILE_SIZE+ HALF_FONT_SIZE;
+			self.font._renderText(self._context, STR_MENU_START_RANDOM_GAME, TILE_SIZE*3, y);
+			self.font._renderText(self._context, '_', TILE_SIZE*3, y+HALF_FONT_SIZE);
+			y+=TILE_SIZE;
+			self.font._renderText(self._context, STR_MENU_LOAD_MAP, TILE_SIZE*3, y);
+			self.font._renderText(self._context, '_', TILE_SIZE*3, y+HALF_FONT_SIZE);
+			y+=TILE_SIZE;
+			self.font._renderText(self._context, STR_MENU_EDIT_MAP, TILE_SIZE*3, y);
+			self.font._renderText(self._context, '_', TILE_SIZE*3, y+HALF_FONT_SIZE);
+			y-=HALF_FONT_SIZE;
+			// draw player at pos
+			var gfx = new Gfx(self._sprite, 16, 16);
+			gfx._render(self._context, TILE_SIZE+HALF_TILE_SIZE, y - ( 2 - self._menuCurrent )*(TILE_SIZE) );
 		},
 
 		_drawSave: function() {
@@ -2480,6 +2790,8 @@
 			var self = this;
 			self._drawBackground();
 			if ( self._state === Game._STATE_MENU ) {
+				self._drawElements();
+				self._drawEnemies();
 				self._drawMenu();
 			} else if ( self._state === Game._STATE_LOADMAP ) {
 				self._drawLoad();
@@ -2492,6 +2804,16 @@
 				self._drawHud();
 				self._player._render(self._context);
 			}
+		},
+
+		_startMenu: function( ) {
+			var self = this;
+			// menu map :
+			var menuMap = {map:[7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,8,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,7,0,0,0,0,0,0,0,0,0,0,0,0,0,0,7,8,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,7,0,0,0,0,0,0,0,0,0,0,0,0,2,0,7,8,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,7,0,0,0,0,0,0,0,0,0,0,0,3,0,3,7,8,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,7,0,0,0,0,0,0,0,0,0,0,0,3,0,3,7,8,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,7,0,0,0,0,0,0,0,0,0,0,3,3,0,1,7,8,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,7,0,0,0,0,0,0,0,0,0,0,0,0,1,5,7,8,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,7,0,0,0,0,0,0,0,0,2,0,4,1,5,1,7,8,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,7,0,0,0,0,0,0,0,0,0,0,1,5,1,6,7,8,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,7,0,10,8,8,8,8,8,8,8,1,1,5,1,5,7,8,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,7,5,5,5,5,5,5,5,5,5,4,5,5,5,5,7,8,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,8,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5],gemTarget:0,playerX:0,playerY:0};
+			self._readMap(menuMap);
+			self._audioHandler._stopSequence(AUDIO_BG_MUSIC);
+
+			self._changeState(Game._STATE_MENU);
 		},
 
 		_start: function( mapObj ) {
@@ -2517,9 +2839,6 @@
 		_startEdit: function( map ) {
 			var self = this;
 			self._startTime = new Date().getTime();
-
-			self._audioHandler._stopSequence(AUDIO_BG_MUSIC);
-			self._audioHandler._playSequence(AUDIO_BG_MUSIC);
 
 			if ( map ) {
 				self._readMap(map);
