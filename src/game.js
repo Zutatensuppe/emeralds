@@ -83,19 +83,19 @@
 	var ELEMENT_NULL = 8;
 	var ELEMENT_EXPLOSION = 9;
 
-
-	var ELEMENT_GRASS_BORDER_TOP_LEFT = 20;
-	var ELEMENT_GRASS_BORDER_TOP_RIGHT = 21;
-	var ELEMENT_GRASS_BORDER_BOTTOM_LEFT = 22;
-	var ELEMENT_GRASS_BORDER_BOTTOM_RIGHT = 23;
-	var ELEMENT_LAVA_BORDER_TOP_LEFT = 24;
-	var ELEMENT_LAVA_BORDER_TOP_RIGHT = 25;
-	var ELEMENT_LAVA_BORDER_BOTTOM_LEFT = 26;
-	var ELEMENT_LAVA_BORDER_BOTTOM_RIGHT = 27;
-	var ELEMENT_NULL_BORDER_TOP_LEFT = 28;
-	var ELEMENT_NULL_BORDER_TOP_RIGHT = 29;
-	var ELEMENT_NULL_BORDER_BOTTOM_LEFT = 30;
-	var ELEMENT_NULL_BORDER_BOTTOM_RIGHT = 31;
+	//
+	//var ELEMENT_GRASS_BORDER_TOP_LEFT = 20;
+	//var ELEMENT_GRASS_BORDER_TOP_RIGHT = 21;
+	//var ELEMENT_GRASS_BORDER_BOTTOM_LEFT = 22;
+	//var ELEMENT_GRASS_BORDER_BOTTOM_RIGHT = 23;
+	//var ELEMENT_LAVA_BORDER_TOP_LEFT = 24;
+	//var ELEMENT_LAVA_BORDER_TOP_RIGHT = 25;
+	//var ELEMENT_LAVA_BORDER_BOTTOM_LEFT = 26;
+	//var ELEMENT_LAVA_BORDER_BOTTOM_RIGHT = 27;
+	//var ELEMENT_NULL_BORDER_TOP_LEFT = 28;
+	//var ELEMENT_NULL_BORDER_TOP_RIGHT = 29;
+	//var ELEMENT_NULL_BORDER_BOTTOM_LEFT = 30;
+	//var ELEMENT_NULL_BORDER_BOTTOM_RIGHT = 31;
 
 	var ENEMY_STRIDER = 10;
 	var ENEMY_NIKI = 11;
@@ -119,10 +119,13 @@
 	var STR_EDIT_HELP_4 = 'Time Limit: T+Number+ENTER=set (in seconds) T+T=autoset';
 	var STR_STATUS_TEXT_GAMEOVER = 'Game over...';
 	var STR_STATUS_TEXT_WIN = 'A winner is you!';
+	var STR_STATUS_PAUSED = 'Paused';
 	var STR_ERROR_UNABLE_TO_SAVE_MAP = 'Unable to save map.';
 	var STR_HINT_PLEASE_ENTER_NAME = 'Please enter a name';
 	var STR_SAVED_AS_SPACE = 'Saved as ';
 	var STR_MSG_DOOR_OPENED = 'Door was opened!!';
+	var STR_DEATH_TIME_UP = 'Time up!';
+	var STR_DEATH_SLAIN = 'You have been slain!';
 
 
 	var MENU_START_GAME = 0;
@@ -437,7 +440,7 @@
 				}
 			});
 		},
-		play: function(key) {
+		_play: function(key) {
 			// fetch the sound for the key
 			var sound = this._sounds[key];
 			if ( ! sound ) {
@@ -492,8 +495,8 @@
 		self._h = h;
 		self._dirX = 0;
 		self._dirY = 0;
-		self._speed = 0;
-		self._stepsPerTile = 1;
+		self._speed = OBJECT_SPEED;
+		self._stepsPerTile = TILE_SIZE/self._speed;
 		self._substep = 0;
 		self._isWalkable = false;
 		self._isPushable = false;
@@ -587,7 +590,7 @@
 				self._game._createExplosion(pos.x,pos.y);
 			}
 			if ( self instanceof Stone ) {
-				self._game._audioHandler.play(AUDIO_STONE);
+				self._game._audioHandler._play(AUDIO_STONE);
 			}
 		}
 
@@ -616,7 +619,7 @@
 		pos = self._getActualPosition();
 
 		self._game._deleteElementAtIndex(idx);
-		self._game._setElementAtIndex(pos.y*MAP_SIZE_X+pos.x, self);
+		self._game._setElementAtIndex(self._game._posToIndex(pos), self);
 
 	};
 
@@ -626,16 +629,15 @@
 	function Player(g, x, y) {
 		var self = this;
 		Entity[PROTO][CONSTRUCTOR].call(self, g, null, x, y, TILE_SIZE, TILE_SIZE);
-		self._speed = OBJECT_SPEED;
-		self._stepsPerTile = TILE_SIZE/self._speed;
-		self._substep = 0; // max TILE_SIZE/this.speed
-		self._gemCount = 0;
 
 		self._gfx = new Gfx(g._sprite, 16, 16);
 		self._gfxLeft = [new Gfx(g._sprite, 0, 32), new Gfx(g._sprite, 16, 32)];
 		self._gfxRight = [new Gfx(g._sprite, 0, 48), new Gfx(g._sprite, 16, 48)];
 		self._gfxDown = [new Gfx(g._sprite, 0, 64), new Gfx(g._sprite, 16, 64)];
 		self._gfxUp = [new Gfx(g._sprite, 0, 80), new Gfx(g._sprite, 16, 80)];
+
+		self._gemCount = 0;
+		self._reverseHit = false;
 	}
 	Player[PROTO] = Object.create(Entity[PROTO]);
 	Player[PROTO][CONSTRUCTOR] = Player;
@@ -645,22 +647,20 @@
 		var screenX = self._x - self._game._renderStartX;
 		var screenY = self._y - self._game._renderStartY;
 
+		var currentGfx = self._gfx;
 		if (  self._game._state === Game._STATE_GAME || self._game._state === Game._STATE_EDIT ) {
 			var frame = self._game._ticks % 24 < 12 ? 1 : 0;
 			if ( self._dirX < 0 ) {
-				self._gfxLeft[frame]._render(context, screenX, screenY);
+				currentGfx = self._gfxLeft[frame];
 			} else if ( self._dirX > 0 ) {
-				self._gfxRight[frame]._render(context, screenX, screenY);
+				currentGfx = self._gfxRight[frame];
 			} else if ( self._dirY > 0 ) {
-				self._gfxDown[frame]._render(context, screenX, screenY);
+				currentGfx = self._gfxDown[frame];
 			} else if ( self._dirY < 0 ) {
-				self._gfxUp[frame]._render(context, screenX, screenY);
-			} else {
-				self._gfx._render(context, screenX, screenY);
+				currentGfx = self._gfxUp[frame];
 			}
-		} else {
-			self._gfx._render(context, screenX, screenY);
 		}
+		currentGfx._render(context, screenX, screenY);
 	};
 
 	/* Enemy
@@ -735,9 +735,6 @@
 	function Strider(g, x, y) {
 		var self = this;
 		Enemy[PROTO][CONSTRUCTOR].call(self, g, g._elementGraphics[ENEMY_STRIDER], x, y, TILE_SIZE, TILE_SIZE);
-		self._speed = OBJECT_SPEED;
-		self._stepsPerTile = TILE_SIZE/self._speed;
-		self._substep = 0; // max TILE_SIZE/this._speed
 	}
 	Strider[PROTO] = ObjCreate(Enemy[PROTO]);
 	Strider[PROTO][CONSTRUCTOR] = Strider;
@@ -775,12 +772,8 @@
 	/* Niki
 	 ===============================================================*/
 	function Niki(g, x, y) {
-		var self = this;
-		Enemy[PROTO][CONSTRUCTOR].call(self, g, g._elementGraphics[ENEMY_NIKI], x, y, TILE_SIZE, TILE_SIZE);
-		self._speed = OBJECT_SPEED;
-		self._stepsPerTile = TILE_SIZE/self._speed;
-		self._substep = 0; // max TILE_SIZE/this._speed
-		self._dir = -1;
+		Enemy[PROTO][CONSTRUCTOR].call(this, g, g._elementGraphics[ENEMY_NIKI], x, y, TILE_SIZE, TILE_SIZE);
+		this._dir = -1;
 	}
 	Niki[PROTO] = ObjCreate(Enemy[PROTO]);
 	Niki[PROTO][CONSTRUCTOR] = Niki;
@@ -911,22 +904,19 @@
 	};
 	Niki[PROTO]._render = function(context) {
 		var self = this;
+		var rotate = false;
 		if ( this._dirX > 0 ) {
-			context.save();
-			context.translate(self._x - self._game._renderStartX + HALF_TILE_SIZE, self._y - self._game._renderStartY + HALF_TILE_SIZE);
-			context.rotate(180*Math.PI / 180);
-			self._gfx._render(context, -HALF_TILE_SIZE, -HALF_TILE_SIZE);
-			context.restore();
+			rotate = 18;
 		} else if ( this._dirY < 0 ) {
-			context.save();
-			context.translate(self._x - self._game._renderStartX + HALF_TILE_SIZE, self._y - self._game._renderStartY + HALF_TILE_SIZE);
-			context.rotate(90*Math.PI / 180);
-			self._gfx._render(context, -HALF_TILE_SIZE, -HALF_TILE_SIZE);
-			context.restore();
+			rotate = 9;
 		} else if ( this._dirY > 0 ) {
+			rotate = 27;
+		}
+
+		if ( rotate ) {
 			context.save();
 			context.translate(self._x - self._game._renderStartX + HALF_TILE_SIZE, self._y - self._game._renderStartY + HALF_TILE_SIZE);
-			context.rotate(270*Math.PI / 180);
+			context.rotate(rotate*Math.PI / 18);
 			self._gfx._render(context, -HALF_TILE_SIZE, -HALF_TILE_SIZE);
 			context.restore();
 		} else {
@@ -945,9 +935,6 @@
 	function Stone(g, x, y){
 		var self = this;
 		Entity[PROTO][CONSTRUCTOR].call(self, g, g._elementGraphics[ELEMENT_STONE], x, y, TILE_SIZE, TILE_SIZE);
-		self._speed = OBJECT_SPEED;
-		self._stepsPerTile = TILE_SIZE/self._speed;
-		self._substep = 0; // max TILE_SIZE/self._speed
 		self._isWalkable = false;
 		self._isPushable = true;
 		self._canFall = true;
@@ -961,9 +948,6 @@
 	function Bomb(g, x, y){
 		var self = this;
 		Entity[PROTO][CONSTRUCTOR].call(self, g, g._elementGraphics[ELEMENT_BOMB], x, y, TILE_SIZE, TILE_SIZE);
-		self._speed = OBJECT_SPEED;
-		self._stepsPerTile = TILE_SIZE/self._speed;
-		self._substep = 0; // max TILE_SIZE/self._speed
 		self._isWalkable = false;
 		self._isPushable = true;
 		self._canFall = true;
@@ -1005,7 +989,7 @@
 	Gem[PROTO][CONSTRUCTOR] = Gem;
 	Gem[PROTO]._playCollectSound = function() {
 		var self = this;
-		self._game._audioHandler.play(self._collectSound);
+		self._game._audioHandler._play(self._collectSound);
 		self._game._audioHandler._playSequence(self._collectSound);
 	};
 
@@ -1123,13 +1107,12 @@
 	};
 	Door[PROTO]._render = function(context) {
 		var self = this;
+		var currentGfx = self._gfx;
 		if ( (self._game._state === Game._STATE_GAME || self._game._state === Game._STATE_EDIT) && self._isOpen ) {
-			var frame = self._game._ticks % 32 < 16 ? 1 : 0;
+			currentGfx = self._gfxOpen[self._game._ticks % 32 < 16 ? 1 : 0];
 			//self.frame = ( self.substep > self.stepsPerTile / 2 ) ? 1 : 0;
-			self._gfxOpen[frame]._render(context, self._x - self._game._renderStartX, self._y - self._game._renderStartY);
-		} else {
-			self._gfx._render(context, self._x - self._game._renderStartX, self._y - self._game._renderStartY);
 		}
+		currentGfx._render(context, self._x - self._game._renderStartX, self._y - self._game._renderStartY);
 	};
 
 
@@ -1141,7 +1124,7 @@
 		this._ticktick = ticktick;
 	}
 	Message[PROTO]._render = function(context, msgIndex) {
-		this._game.font._renderText(
+		this._game._font._renderText(
 			context,
 			this._text,
 			VISIBLE_WIDTH*HALF_TILE_SIZE - this._text.length*HALF_FONT_SIZE,
@@ -1165,11 +1148,12 @@
 		self._context.webkitImageSmoothingEnabled = false;
 		self._context.msImageSmoothingEnabled = false;
 		self._context.imageSmoothingEnabled = false;
-		self.font = null;
+		self._font = null;
 		self._ticks = 0;
 
-		self._startTime = 0;
-		self._timeLimit = 0;
+		self._timeElapsedMs = 0;
+		self._timeLimitMs = 0;
+
 		self._renderStartX = 0;
 		self._renderStartY = 0;
 
@@ -1209,7 +1193,7 @@
 
 		self._sprite = new Sprite('sprites.png', function() {
 
-			self.font = new Font(self._sprite);
+			self._font = new Font(self._sprite);
 			self._initGraphics();
 
 			self._startMenu();
@@ -1233,15 +1217,14 @@
 
 			} if ( self._state === Game._STATE_EDIT
 				|| self._state === Game._STATE_GAME
+				|| self._state === Game._STATE_PAUSE
 				) {
 
 				self._handleInput();
-				self.update();
+				self._update();
 				self._render();
 
-			} else if ( self._state === Game._STATE_GAMEOVER
-				|| self._state === Game._STATE_WON
-				) {
+			} else {
 				self._handleInput();
 			}
 
@@ -1259,6 +1242,7 @@
 	Game._STATE_EDIT = 5;
 	Game._STATE_SAVEMAP = 6;
 	Game._STATE_LOADMAP = 7;
+	Game._STATE_PAUSE = 8;
 
 	Game[PROTO] = {
 		_initAudio: function() {
@@ -1463,26 +1447,25 @@
 
 			self._elementGraphics[ENEMY_STRIDER] = new Gfx(self._sprite, 96, 80);
 			self._elementGraphics[ENEMY_NIKI] = new Gfx(self._sprite, 80, 80);
-
-
+			//
 			self._elementGraphics[ELEMENT_GRASS] = new Gfx(self._sprite, 48, 80);
-			self._elementGraphics[ELEMENT_GRASS_BORDER_TOP_LEFT] = new Gfx(self._sprite, 64, 80, SPRITE_TILE_SIZE/2);
-			self._elementGraphics[ELEMENT_GRASS_BORDER_TOP_RIGHT] = new Gfx(self._sprite, 72, 80, SPRITE_TILE_SIZE/2);
-			self._elementGraphics[ELEMENT_GRASS_BORDER_BOTTOM_LEFT] = new Gfx(self._sprite, 64, 88, SPRITE_TILE_SIZE/2);
-			self._elementGraphics[ELEMENT_GRASS_BORDER_BOTTOM_RIGHT] = new Gfx(self._sprite, 72, 88, SPRITE_TILE_SIZE/2);
-
-
+			//self._elementGraphics[ELEMENT_GRASS_BORDER_TOP_LEFT] = new Gfx(self._sprite, 64, 80, SPRITE_TILE_SIZE/2);
+			//self._elementGraphics[ELEMENT_GRASS_BORDER_TOP_RIGHT] = new Gfx(self._sprite, 72, 80, SPRITE_TILE_SIZE/2);
+			//self._elementGraphics[ELEMENT_GRASS_BORDER_BOTTOM_LEFT] = new Gfx(self._sprite, 64, 88, SPRITE_TILE_SIZE/2);
+			//self._elementGraphics[ELEMENT_GRASS_BORDER_BOTTOM_RIGHT] = new Gfx(self._sprite, 72, 88, SPRITE_TILE_SIZE/2);
+			//
+			//
 			self._elementGraphics[ELEMENT_LAVA] = new Gfx(self._sprite, 80, 64);
-			self._elementGraphics[ELEMENT_LAVA_BORDER_TOP_LEFT] = new Gfx(self._sprite, 96, 64, SPRITE_TILE_SIZE/2);
-			self._elementGraphics[ELEMENT_LAVA_BORDER_TOP_RIGHT] = new Gfx(self._sprite, 102, 64, SPRITE_TILE_SIZE/2);
-			self._elementGraphics[ELEMENT_LAVA_BORDER_BOTTOM_LEFT] = new Gfx(self._sprite, 96, 72, SPRITE_TILE_SIZE/2);
-			self._elementGraphics[ELEMENT_LAVA_BORDER_BOTTOM_RIGHT] = new Gfx(self._sprite, 102, 72, SPRITE_TILE_SIZE/2);
-
+			//self._elementGraphics[ELEMENT_LAVA_BORDER_TOP_LEFT] = new Gfx(self._sprite, 96, 64, SPRITE_TILE_SIZE/2);
+			//self._elementGraphics[ELEMENT_LAVA_BORDER_TOP_RIGHT] = new Gfx(self._sprite, 102, 64, SPRITE_TILE_SIZE/2);
+			//self._elementGraphics[ELEMENT_LAVA_BORDER_BOTTOM_LEFT] = new Gfx(self._sprite, 96, 72, SPRITE_TILE_SIZE/2);
+			//self._elementGraphics[ELEMENT_LAVA_BORDER_BOTTOM_RIGHT] = new Gfx(self._sprite, 102, 72, SPRITE_TILE_SIZE/2);
+			//
 			self._elementGraphics[ELEMENT_NULL] = new Gfx(self._sprite, 48, 64);
-			self._elementGraphics[ELEMENT_NULL_BORDER_TOP_LEFT] = new Gfx(self._sprite, 64, 64, SPRITE_TILE_SIZE/2);
-			self._elementGraphics[ELEMENT_NULL_BORDER_TOP_RIGHT] = new Gfx(self._sprite, 72, 64, SPRITE_TILE_SIZE/2);
-			self._elementGraphics[ELEMENT_NULL_BORDER_BOTTOM_LEFT] = new Gfx(self._sprite, 64, 72, SPRITE_TILE_SIZE/2);
-			self._elementGraphics[ELEMENT_NULL_BORDER_BOTTOM_RIGHT] = new Gfx(self._sprite, 72, 72, SPRITE_TILE_SIZE/2);
+			//self._elementGraphics[ELEMENT_NULL_BORDER_TOP_LEFT] = new Gfx(self._sprite, 64, 64, SPRITE_TILE_SIZE/2);
+			//self._elementGraphics[ELEMENT_NULL_BORDER_TOP_RIGHT] = new Gfx(self._sprite, 72, 64, SPRITE_TILE_SIZE/2);
+			//self._elementGraphics[ELEMENT_NULL_BORDER_BOTTOM_LEFT] = new Gfx(self._sprite, 64, 72, SPRITE_TILE_SIZE/2);
+			//self._elementGraphics[ELEMENT_NULL_BORDER_BOTTOM_RIGHT] = new Gfx(self._sprite, 72, 72, SPRITE_TILE_SIZE/2);
 
 		},
 		_changeState: function( toState ) {
@@ -1514,9 +1497,9 @@
 				[5,ELEMENT_STONE],
 				[20,ELEMENT_GRASS],
 				[20,ELEMENT_LAVA],
-				//[10,ELEMENT_WALL],
-				//[1,ENEMY_NIKI],
-				//[1,ENEMY_STRIDER]
+				[10,ELEMENT_WALL],
+				[1,ENEMY_NIKI],
+				[1,ENEMY_STRIDER]
 			];
 
 
@@ -1565,7 +1548,7 @@
 			this._readMap(obj);
 
 			this._gemTarget = (this._gemCount * 0.75) | 0;
-			this._timeLimit = 300; // set to some minutes by default
+			this._timeLimitMs = 300*1000; // set to some minutes by default
 
 		},
 		_readMap: function(obj) {
@@ -1583,7 +1566,7 @@
 			});
 
 			self._gemTarget = obj.gemTarget || self._gemCount;
-			self._timeLimit = obj.timeLimit || 0;
+			self._timeLimitMs = (obj.timeLimit || 0)*1000;
 			self._player = new Player(self, obj.playerX*TILE_SIZE, obj.playerY*TILE_SIZE);
 		},
 		_loadMap: function(mapName) {
@@ -1602,30 +1585,41 @@
 			self._enemies.forEach(function(enemy) {
 				// set enemies on the map object
 				var p = enemy._getActualPosition();
-				var idx = p.y*MAP_SIZE_X+p.x;
-				map[idx] = self._elementToElementCode(enemy);
+				map[self._posToIndex(p)] = self._elementToElementCode(enemy);
 			});
 			//TODO: check if localStorage can be used.
 			localStorage.setItem('map-'+mapName.toLowerCase(), JSON.stringify({
 				// note: _elements.map = function. not a map of self game
 				map: map,
 				gemTarget: self._gemTarget,
-				timeLimit: self._timeLimit,
+				timeLimit: (self._timeLimitMs/1000 | 0),
 				playerX: pos.x,
 				playerY: pos.y
 			}));
 			return true;
 		},
 		_setElementAtIndexByCode: function(idx, elCode, remvoveEnemy) {
+			var pos = this._indexToPos(idx);
 			this._setElementAtIndex(
 				idx,
 				this._elementCodeToElement(
 					elCode,
-					(idx%MAP_SIZE_X) * TILE_SIZE,
-					parseInt(idx/MAP_SIZE_X, 10) * TILE_SIZE
+					pos.x * TILE_SIZE,
+					pos.y * TILE_SIZE
 				),
 				remvoveEnemy
 			);
+		},
+		_setReverseElementAtIndex: function(idx) {
+			var self = this;
+			if ( self._elements.length <= idx || idx < 0 ) {
+				return;
+			}
+
+			var tmp = self._elements[idx];
+			self._elements[idx] = self._rElements[idx];
+			self._rElements[idx] = tmp;
+
 		},
 		_setElementAtIndex: function(idx, el, removeEnemy) {
 			var self = this;
@@ -1635,15 +1629,14 @@
 			}
 
 			var rel = null;
-			var actualX = (idx%MAP_SIZE_X);
-			var actualY = parseInt(idx/MAP_SIZE_X, 10);
-			var posX = actualX * TILE_SIZE;
-			var posY = actualY * TILE_SIZE;
+			var actualPos = self._indexToPos(idx);
+			var posX = actualPos.x * TILE_SIZE;
+			var posY = actualPos.y * TILE_SIZE;
 
 			if ( removeEnemy ) {
 				self._enemies.forEach(function(enemy, idx, arr) {
 					var ePos = enemy._getActualPosition();
-					if ( ePos.x === actualX && ePos.y === actualY ) {
+					if ( ePos.x === actualPos.x && ePos.y === actualPos.y ) {
 						arr.splice(idx, 1);
 					}
 				});
@@ -1714,15 +1707,16 @@
 			self._setElementAtIndex(idx, null);
 		},
 		_getElementAtPos: function(x, y) {
+			var self = this;
 
 			if ( x < 0 || x >= MAP_SIZE_X || y < 0 || y >= MAP_SIZE_Y ) {
 				return undefined;
 			}
 
-			if ( this._isReversed ) {
-				return this._rElements[y*MAP_SIZE_X+x];
+			if ( self._isReversed ) {
+				return self._rElements[self._posToIndex(x,y)];
 			} else {
-				return this._elements[y*MAP_SIZE_X+x];
+				return self._elements[self._posToIndex(x,y)];
 			}
 		},
 
@@ -1754,7 +1748,7 @@
 			});
 			if ( openedAnyDoor ) {
 				self._messages.push(new Message(self, STR_MSG_DOOR_OPENED, 150));
-				self._audioHandler.play(AUDIO_OPENDOOR);
+				self._audioHandler._play(AUDIO_OPENDOOR);
 			}
 
 		},
@@ -1829,6 +1823,12 @@
 			}
 		},
 
+		_pauseGame: function() {
+			this._state = Game._STATE_PAUSE;
+		},
+		_unpauseGame: function() {
+			this._state = Game._STATE_GAME;
+		},
 		_drawBackground: function() {
 			var self = this;
 			var i;
@@ -1882,15 +1882,13 @@
 				// get all the input until enter is pressed . this will be the name of the map.
 				// or if escape is pressed, cancel savemap state and go back to edit mode
 
-				if ( self._inputHandler._isPressed(VK_RETURN) ) {
-					if ( self._editCurrentMapName.length > 0 ) {
-						var map = self._loadMap(self._editCurrentMapName);
-						if ( map ) {
-							if ( self._prevState === Game._STATE_EDIT ) {
-								self._startEdit(map);
-							} else {
-								self._start(map);
-							}
+				if ( self._inputHandler._isPressed(VK_RETURN) && self._editCurrentMapName.length > 0 ) {
+					var map = self._loadMap(self._editCurrentMapName);
+					if ( map ) {
+						if ( self._prevState === Game._STATE_EDIT ) {
+							self._startEdit(map);
+						} else {
+							self._start(map);
 						}
 					}
 				}
@@ -1927,16 +1925,14 @@
 				// get all the input until enter is pressed . this will be the name of the map.
 				// or if escape is pressed, cancel savemap state and go back to edit mode
 
-				if ( self._inputHandler._isPressed(VK_RETURN) ) {
-					if ( self._editCurrentMapName.length > 0 ) {
-						if ( self._saveMap(self._editCurrentMapName) ) {
-							// saved..
-							// just go to edit mode
-							self._changeState(Game._STATE_EDIT);
-							self._messages.push(new Message(self, STR_SAVED_AS_SPACE+'"'+self._editCurrentMapName+'"...', 150));
-						} else {
-							self._loadSaveMapHint = STR_ERROR_UNABLE_TO_SAVE_MAP;
-						}
+				if ( self._inputHandler._isPressed(VK_RETURN) && self._editCurrentMapName.length > 0 ) {
+					if ( self._saveMap(self._editCurrentMapName) ) {
+						// saved..
+						// just go to edit mode
+						self._changeState(Game._STATE_EDIT);
+						self._messages.push(new Message(self, STR_SAVED_AS_SPACE+'"'+self._editCurrentMapName+'"...', 150));
+					} else {
+						self._loadSaveMapHint = STR_ERROR_UNABLE_TO_SAVE_MAP;
 					}
 				}
 
@@ -2001,11 +1997,11 @@
 				if ( self._inputHandler._isPressed(VK_T) ) {
 					if ( self._editAwaitingTimeLimitTarget !== false ) {
 						self._editAwaitingTimeLimitTarget = false;
-						self._timeLimit = 300;
+						self._timeLimitMs = 300*1000;
 					} else {
 						// awaiting target gem number
 						self._editAwaitingTimeLimitTarget = '';
-						self._timeLimit = 0;
+						self._timeLimitMs = 0;
 					}
 				}
 				if ( self._editAwaitingTimeLimitTarget !== false ) {
@@ -2013,7 +2009,7 @@
 						// input numbers
 						if ( self._inputHandler._isPressed(i) ) {
 							self._editAwaitingTimeLimitTarget+=''+String.fromCharCode(i);
-							self._timeLimit = Number(self._editAwaitingTimeLimitTarget);
+							self._timeLimitMs = Number(self._editAwaitingTimeLimitTarget) * 1000;
 						}
 					}
 					if ( self._inputHandler._isPressed(VK_RETURN) ) {
@@ -2045,13 +2041,11 @@
 				}
 
 				if ( self._inputHandler._isDown(VK_E) ) {
-					var pos = self._player._getActualPosition();
-					self._setElementAtIndexByCode(pos.y*MAP_SIZE_X+pos.x, self._allEditElements[self._editCurrentElement], 1);
+					self._setElementAtIndexByCode(self._posToIndex(self._player._getActualPosition()), self._allEditElements[self._editCurrentElement], 1);
 				}
 
 				if ( self._inputHandler._isDown(VK_X) ) {
-					var pos = self._player._getActualPosition();
-					self._setElementAtIndex(pos.y*MAP_SIZE_X+pos.x, null, 1);
+					self._setElementAtIndex(self._posToIndex(self._player._getActualPosition()), null, 1);
 				}
 
 				if ( self._inputHandler._isPressed(VK_L) ) {
@@ -2067,32 +2061,44 @@
 
 				if ( self._player._substep === 0 ) {
 
+					self._player._dirX = 0;
+					self._player._dirY = 0;
 					if ( self._inputHandler._isDown(VK_UP) ) {
-						self._player._dirX = 0;
 						self._player._dirY = -1;
 					} else if ( self._inputHandler._isDown(VK_DOWN) ) {
-						self._player._dirX = 0;
 						self._player._dirY = 1;
 					} else if ( self._inputHandler._isDown(VK_LEFT) ) {
 						self._player._dirX = -1;
-						self._player._dirY = 0;
 					} else if ( self._inputHandler._isDown(VK_RIGHT) ) {
 						self._player._dirX = 1;
-						self._player._dirY = 0;
-					} else {
-						self._player._dirX = 0;
-						self._player._dirY = 0;
 					}
 
 					if ( self._inputHandler._isPressed(VK_R) ) {
-						self._isReversed = !self._isReversed;
-						self._audioHandler.play(AUDIO_REVERSE);
+						//self._isReversed = !self._isReversed;
+						self._player._reverseHit = true;
+						self._audioHandler._play(AUDIO_REVERSE);
 					}
 				}
 
+				//
 				if ( self._inputHandler._isPressed(VK_ESCAPE) ) {
 					// go to menu for now. later maybe add pause.
 					self._audioHandler._stopSequence(AUDIO_BG_MUSIC);
+					self._startMenu();
+				}
+
+			}
+			/* Game is paused
+			=========================================================================== */
+			else if ( self._state === Game._STATE_PAUSE ) {
+
+				if ( self._inputHandler._isPressed(VK_ESCAPE) ) {
+					// go to menu for now. later maybe add pause.
+					self._unpauseGame();
+				}
+
+				if ( self._inputHandler._isPressed(VK_E) ) {
+					// go to menu
 					self._startMenu();
 				}
 
@@ -2101,31 +2107,27 @@
 			=========================================================================== */
 			else if ( self._state === Game._STATE_GAME && self._player._substep === 0 ) {
 
+				self._player._dirX = 0;
+				self._player._dirY = 0;
 				if ( self._inputHandler._isDown(VK_UP) ) {
-					self._player._dirX = 0;
 					self._player._dirY = -1;
 				} else if ( self._inputHandler._isDown(VK_DOWN) ) {
-					self._player._dirX = 0;
 					self._player._dirY = 1;
 				} else if ( self._inputHandler._isDown(VK_LEFT) ) {
 					self._player._dirX = -1;
-					self._player._dirY = 0;
 				} else if ( self._inputHandler._isDown(VK_RIGHT) ) {
 					self._player._dirX = 1;
-					self._player._dirY = 0;
-				} else {
-					self._player._dirX = 0;
-					self._player._dirY = 0;
 				}
 
 				if ( self._inputHandler._isPressed(VK_R) ) {
-					self._isReversed = !self._isReversed;
-					self._audioHandler.play(AUDIO_REVERSE);
+					//self._isReversed = !self._isReversed;
+					self._player._reverseHit = true;
+					self._audioHandler._play(AUDIO_REVERSE);
 				}
 
 				if ( self._inputHandler._isPressed(VK_ESCAPE) ) {
 					// go to menu for now. later maybe add pause.
-					self._startMenu();
+					self._pauseGame();
 				}
 
 			}
@@ -2146,6 +2148,18 @@
 				self._audioHandler.mute(self._isMuted);
 			}
 
+		},
+
+		_posToIndex: function( x, y ) {
+			if ( typeof y === UNDEF ) {
+				// guess that x is a pos object with x and y
+				return x.y*MAP_SIZE_X+x.x;
+			}
+			return y*MAP_SIZE_X+x
+		},
+
+		_indexToPos: function( idx ) {
+			return {x: (idx%MAP_SIZE_X), y: (idx/MAP_SIZE_X | 0)};
 		},
 
 		_maybeCreateExplosion: function(x, y) {
@@ -2177,11 +2191,11 @@
 			} else if ( chkEl !== null ) {
 				// delete original element
 				var pos = chkEl._getActualPosition();
-				self._deleteElementAtIndex(pos.y*MAP_SIZE_X+pos.x);
+				self._deleteElementAtIndex(self._posToIndex(pos));
 			}
 
 			// add explosion entity at the place
-			self._setElementAtIndexByCode(y*MAP_SIZE_X+x, ELEMENT_EXPLOSION);
+			self._setElementAtIndexByCode(self._posToIndex(x, y), ELEMENT_EXPLOSION);
 
 		},
 
@@ -2191,7 +2205,7 @@
 			var self = this;
 
 			// set desired place to explosion
-			self._setElementAtIndexByCode(py*MAP_SIZE_X+px, ELEMENT_EXPLOSION);
+			self._setElementAtIndexByCode(self._posToIndex(px, py), ELEMENT_EXPLOSION);
 
 
 			// set surrounding places to explosions (maybe)
@@ -2206,7 +2220,7 @@
 			self._maybeCreateExplosion(px, py+1);
 			self._maybeCreateExplosion(px+1, py+1);
 
-			self._audioHandler.play(AUDIO_EXPLOSION);
+			self._audioHandler._play(AUDIO_EXPLOSION);
 		},
 
 
@@ -2223,31 +2237,29 @@
 			return _anyMobileEntityAt;
 		},
 
-		update: function() {
+		_update: function() {
 			var self = this;
 
 
 			var currentTime = new Date().getTime();
-			if ( currentTime - self._lastUpdate <= 1000/60 ) {
+			var diff = currentTime - self._lastUpdate;
+			if ( diff <= 1000/60 ) {
 				return;
 			}
 
 			self._lastUpdate = currentTime;
 
+			if ( self._state === Game._STATE_PAUSE ) {
+				return;
+			}
+
 			// then move the enemies and elements
 
 			if ( self._state === Game._STATE_GAME ) {
+				self._timeElapsedMs += diff;
 
-				//check timer
-				var timeNow = new Date().getTime();
-				var timeElapsed = (0.5+(timeNow - self._startTime)/1000) | 0;
-				if ( self._timeLimit && self._timeLimit <= timeElapsed ) {
-					// time is up
-					self._changeState(Game._STATE_GAMEOVER);
-					self._audioHandler._stopSequence(AUDIO_BG_MUSIC);
-					self._audioHandler.play(AUDIO_DEATH);
-					//self._audioHandler._playSequence('deathsong');
-					return;
+				if ( self._timeLimitMs && self._timeLimitMs <= self._timeElapsedMs ) {
+					self._startDeath(STR_DEATH_TIME_UP);
 				}
 
 				// move enemies
@@ -2266,6 +2278,25 @@
 
 
 			var player = self._player;
+
+			if ( player._reverseHit && player._substep === 0 ) {
+
+				var playerPos = player._getActualPosition();
+				var x, y;
+				x = playerPos.x;
+				y = playerPos.y;
+				self._setReverseElementAtIndex(self._posToIndex(x-1, y)); // left
+				self._setReverseElementAtIndex(self._posToIndex(x, y-1)); // top
+				self._setReverseElementAtIndex(self._posToIndex(x+1, y)); // right
+				self._setReverseElementAtIndex(self._posToIndex(x, y+1)); // bottom
+
+				self._setReverseElementAtIndex(self._posToIndex(x-1, y-1)); // top left
+				self._setReverseElementAtIndex(self._posToIndex(x+1, y-1)); // top right
+				self._setReverseElementAtIndex(self._posToIndex(x-1, y+1)); // bottom left
+				self._setReverseElementAtIndex(self._posToIndex(x+1, y+1)); // bottom right
+
+				player._reverseHit = false;
+			}
 
 			// if player has any direction, he can possible move, otherwise he cant
 			var canMove = player._dirX !== 0 || player._dirY !== 0;
@@ -2315,7 +2346,7 @@
 				player._move();
 				player._substep = player._substep < player._stepsPerTile-1 ? player._substep+1 : 0;
 				if ( player._substep === 0 ) {
-					self._audioHandler.play(AUDIO_WALK);
+					self._audioHandler._play(AUDIO_WALK);
 				}
 			}
 
@@ -2330,10 +2361,7 @@
 
 					// when the thing is falling and collided with the player, let the player die!
 					if ( element._y <= player._y && self._overlaps(element, player) ) {
-						self._changeState(Game._STATE_GAMEOVER);
-						self._audioHandler._stopSequence(AUDIO_BG_MUSIC);
-						self._audioHandler.play(AUDIO_DEATH);
-						//self._audioHandler._playSequence('deathsong');
+						self._startDeath(STR_DEATH_SLAIN);
 						return;
 					}
 
@@ -2345,7 +2373,7 @@
 						arr.splice(idx,1);
 
 						var p = element._getActualPosition();
-						self._setElementAtIndex(p.y*MAP_SIZE_X+p.x, null);
+						self._setElementAtIndex(self._posToIndex(p), null);
 						p = enemy._getActualPosition();
 						if ( element instanceof Bomb ) {
 							self._createExplosion(p.x, p.y);
@@ -2364,7 +2392,7 @@
 						// die!!!! :3
 						self._changeState(Game._STATE_GAMEOVER);
 						self._audioHandler._stopSequence(AUDIO_BG_MUSIC);
-						self._audioHandler.play(AUDIO_DEATH);
+						self._audioHandler._play(AUDIO_DEATH);
 					}
 
 
@@ -2378,15 +2406,12 @@
 
 
 				var playerPosAfter = player._getActualPosition();
-				var elIndex = playerPosAfter.y*MAP_SIZE_X+playerPosAfter.x;
+				var elIndex = self._posToIndex(playerPosAfter);
 				var elAtPlayer= self._getElementAtPos(playerPosAfter.x, playerPosAfter.y);
 				if ( elAtPlayer === null ) {
 				} else if ( elAtPlayer._isDeadly ) {
 
-					// die!!!! :3
-					self._changeState(Game._STATE_GAMEOVER);
-					self._audioHandler._stopSequence(AUDIO_BG_MUSIC);
-					self._audioHandler.play(AUDIO_DEATH);
+					self._startDeath();
 
 				} else if ( elAtPlayer instanceof Grass ) {
 
@@ -2441,11 +2466,12 @@
 
 			var elementsToRender = self._isReversed ? self._rElements : self._elements;
 			elementsToRender.forEach(function(item, idx) {
+				var pos = self._indexToPos(idx);
 				// item background:
 				self._elementGraphics[ELEMENT_NULL]._render(
 					self._context,
-					(idx%MAP_SIZE_X) * TILE_SIZE - self._renderStartX,
-					(idx/MAP_SIZE_X | 0) * TILE_SIZE - self._renderStartY
+					pos.x * TILE_SIZE - self._renderStartX,
+					pos.y * TILE_SIZE - self._renderStartY
 				);
 			});
 			elementsToRender.forEach(function(item, idx) {
@@ -2621,6 +2647,8 @@
 
 		_drawHud: function() {
 			var self = this;
+			var state = self._state;
+			var ctx = self._context;
 
 
 			var hudRightElement = new Gfx(self._sprite, 48, 16);
@@ -2628,57 +2656,48 @@
 			var hudCenterElement = new Gfx(self._sprite, 48, 32);
 
 			for ( var i = 1; i < VISIBLE_WIDTH-1; i++ ) {
-				hudCenterElement._render(self._context, i*TILE_SIZE, VISIBLE_HEIGHT*TILE_SIZE);
+				hudCenterElement._render(ctx, i*TILE_SIZE, VISIBLE_HEIGHT*TILE_SIZE);
 			}
-			hudLeftElement._render(self._context, 0, VISIBLE_HEIGHT*TILE_SIZE);
-			hudRightElement._render(self._context, VISIBLE_WIDTH*TILE_SIZE-TILE_SIZE, VISIBLE_HEIGHT*TILE_SIZE);
+			hudLeftElement._render(ctx, 0, VISIBLE_HEIGHT*TILE_SIZE);
+			hudRightElement._render(ctx, VISIBLE_WIDTH*TILE_SIZE-TILE_SIZE, VISIBLE_HEIGHT*TILE_SIZE);
 
-			var timeNow = new Date().getTime();
-			var timeElapsed = (0.5+(timeNow - self._startTime)/1000) | 0;
 			var statusText = '';
-			if ( self._state === Game._STATE_GAMEOVER ) {
+			if ( state === Game._STATE_GAMEOVER ) {
 				statusText = STR_STATUS_TEXT_GAMEOVER;
-			} else if ( self._state === Game._STATE_WON ) {
+			} else if ( state === Game._STATE_WON ) {
 				statusText = STR_STATUS_TEXT_WIN;
-			} else if ( self._state === Game._STATE_GAME ) {
+			} else if ( state === Game._STATE_GAME || state === Game._STATE_PAUSE ) {
 				statusText = STR_GEMS_COLON+ self._player._gemCount + '/' + self._gemTarget;
-			} else if ( self._state === Game._STATE_EDIT ) {
+			} else if ( state === Game._STATE_EDIT ) {
 				statusText = STR_GEM_TARGET_COLON+self._gemTarget;
 			}
 
-
-			if ( self._state === Game._STATE_EDIT ) {
+			if ( state === Game._STATE_EDIT ) {
 				var x = statusText.length*FONT_SIZE+FONT_SIZE+HALF_FONT_SIZE,
 					y = VISIBLE_HEIGHT*TILE_SIZE + HALF_TILE_SIZE - HALF_FONT_SIZE;
 
-
-
-				self.font._renderText(
-					self._context,
+				self._renderText(
 					STR_EDIT_HELP_1,
 					HALF_FONT_SIZE,
-					VISIBLE_HEIGHT*TILE_SIZE-FONT_SIZE-FONT_SIZE,
+					VISIBLE_HEIGHT*TILE_SIZE-TILE_SIZE,
 					8 // smaller font
 				);
-				self.font._renderText(
-					self._context,
+				self._renderText(
 					STR_EDIT_HELP_2,
 					HALF_FONT_SIZE,
-					VISIBLE_HEIGHT*TILE_SIZE-FONT_SIZE-FONT_SIZE+16,
+					VISIBLE_HEIGHT*TILE_SIZE-TILE_SIZE+16,
 					8 // smaller font
 				);
-				self.font._renderText(
-					self._context,
+				self._renderText(
 					STR_EDIT_HELP_3,
 					HALF_FONT_SIZE,
-					VISIBLE_HEIGHT*TILE_SIZE-FONT_SIZE-FONT_SIZE+32,
+					VISIBLE_HEIGHT*TILE_SIZE-TILE_SIZE+32,
 					8 // smaller font
 				);
-				self.font._renderText(
-					self._context,
+				self._renderText(
 					STR_EDIT_HELP_4,
 					HALF_FONT_SIZE,
-					VISIBLE_HEIGHT*TILE_SIZE-FONT_SIZE-FONT_SIZE+48,
+					VISIBLE_HEIGHT*TILE_SIZE-TILE_SIZE+48,
 					8 // smaller font
 				);
 
@@ -2686,44 +2705,39 @@
 				self._allEditElements.forEach(function(e, i) {
 
 					if ( self._editCurrentElement === i ) {
-						self._context.fillStyle = '#f00';
-						self._context.fillRect(x-2,y-2, FONT_SIZE+4, FONT_SIZE+4);
+						ctx.fillStyle = '#f00';
+						ctx.fillRect(x-2,y-2, FONT_SIZE+4, FONT_SIZE+4);
 					}
 
 					if ( self._elementGraphics[e] ) {
-						self._elementGraphics[e]._render(self._context,x,y,undefined,undefined,FONT_SIZE);
+						self._elementGraphics[e]._render(ctx,x,y,undefined,undefined,FONT_SIZE);
 					}
 					x+= FONT_SIZE+HALF_FONT_SIZE;
 
 				});
 
-				var dValue = self._timeLimit;
-				var s = dValue%60;
-				var timeText = (dValue/60 | 0)+':'+(s > 9 ? s : '0'+s);
-				self.font._renderText(
-					self._context,
-					timeText,
-					VISIBLE_WIDTH*TILE_SIZE - timeText.length * FONT_SIZE - HALF_FONT_SIZE,
-					VISIBLE_HEIGHT*TILE_SIZE + HALF_TILE_SIZE - HALF_FONT_SIZE
-				);
-
 			}
 
-			self.font._renderText(
-				self._context,
+			self._renderText(
 				statusText,
 				HALF_FONT_SIZE,
 				VISIBLE_HEIGHT*TILE_SIZE + HALF_TILE_SIZE - HALF_FONT_SIZE
 			);
 
-			if ( self._state === Game._STATE_GAME || self._state === Game._STATE_GAMEOVER || self._state === Game._STATE_WON ) {
+			if ( state === Game._STATE_GAME
+				|| state === Game._STATE_GAMEOVER
+				|| state === Game._STATE_WON
+				|| state === Game._STATE_EDIT
+				|| state === Game._STATE_PAUSE
+				) {
 
-
-				var dValue = self._timeLimit > 0 ? self._timeLimit - timeElapsed%60 : timeElapsed%60;
+				var elapsed = self._timeElapsedMs/1000 | 0;
+				var limit  = self._timeLimitMs/1000 || 0;
+				var tElapsed = elapsed ? elapsed%60 : 0;
+				var dValue = limit > 0 ? limit - tElapsed : tElapsed;
 				var s = dValue%60;
 				var timeText = (dValue/60 | 0)+':'+(s > 9 ? s : '0'+s);
-				self.font._renderText(
-					self._context,
+				self._renderText(
 					timeText,
 					VISIBLE_WIDTH*TILE_SIZE - timeText.length * FONT_SIZE - HALF_FONT_SIZE,
 					VISIBLE_HEIGHT*TILE_SIZE + HALF_TILE_SIZE - HALF_FONT_SIZE
@@ -2735,54 +2749,63 @@
 				if ( --msg._ticktick === 0 ) {
 					arr.splice(idx,1);
 				}
-				msg._render(self._context, msgOffset++);
+				msg._render(ctx, msgOffset++);
 			});
 
 
+			if ( state === Game._STATE_PAUSE ) {
+
+				//(ESC: unpause, E: EXIT TO MENU)
+				self._context.save();
+				self._context.fillStyle="#000";
+				self._context.globalAlpha=0.5;
+				self._context.fillRect(0,0, self._canvas.width, self._canvas.height);
+				self._context.restore();
+
+				var pauseText = 'PAUSE';
+				self._renderText( pauseText, TILE_SIZE*3, TILE_SIZE*3 );
+				pauseText = 'ESC: Continue';
+				self._renderText( pauseText, TILE_SIZE*3, TILE_SIZE*3 + FONT_SIZE+HALF_FONT_SIZE );
+				pauseText = 'E:   Exit';
+				self._renderText( pauseText, TILE_SIZE*3, TILE_SIZE*3 + (FONT_SIZE+HALF_FONT_SIZE)*2 );
+			}
+
+		},
+
+		_renderText: function(text, x, y, size) {
+			this._font._renderText(this._context, text, x, y, size);
 		},
 
 		_drawMenu: function() {
 
 			var self = this;
 			var y = TILE_SIZE+HALF_TILE_SIZE;
-			self.font._renderText(self._context, 'Rev. Emerald Mine', TILE_SIZE+HALF_TILE_SIZE, y, TILE_SIZE *.75);
+			self._renderText('Rev. Emerald Mine', TILE_SIZE+HALF_TILE_SIZE, y, TILE_SIZE *.75);
 			y+=TILE_SIZE+HALF_TILE_SIZE+ HALF_FONT_SIZE;
-			self.font._renderText(self._context, STR_MENU_START_RANDOM_GAME, TILE_SIZE*3, y);
-			self.font._renderText(self._context, '_', TILE_SIZE*3, y+HALF_FONT_SIZE);
+			self._renderText(STR_MENU_START_RANDOM_GAME, TILE_SIZE*3, y);
+			self._renderText('_', TILE_SIZE*3, y+HALF_FONT_SIZE);
 			y+=TILE_SIZE;
-			self.font._renderText(self._context, STR_MENU_LOAD_MAP, TILE_SIZE*3, y);
-			self.font._renderText(self._context, '_', TILE_SIZE*3, y+HALF_FONT_SIZE);
+			self._renderText(STR_MENU_LOAD_MAP, TILE_SIZE*3, y);
+			self._renderText('_', TILE_SIZE*3, y+HALF_FONT_SIZE);
 			y+=TILE_SIZE;
-			self.font._renderText(self._context, STR_MENU_EDIT_MAP, TILE_SIZE*3, y);
-			self.font._renderText(self._context, '_', TILE_SIZE*3, y+HALF_FONT_SIZE);
+			self._renderText(STR_MENU_EDIT_MAP, TILE_SIZE*3, y);
+			self._renderText('_', TILE_SIZE*3, y+HALF_FONT_SIZE);
 			y-=HALF_FONT_SIZE;
 			// draw player at pos
 			var gfx = new Gfx(self._sprite, 16, 16);
 			gfx._render(self._context, TILE_SIZE+HALF_TILE_SIZE, y - ( 2 - self._menuCurrent )*(TILE_SIZE) );
 		},
 
-		_drawSave: function() {
+		_drawLoadSave: function(txt) {
 			var self = this;
 			var y = 50;
-			self.font._renderText(self._context, STR_SAVE_MAP, 50, y);
+			self._renderText(txt, 50, y);
 			y+=FONT_SIZE+HALF_FONT_SIZE;
-			self.font._renderText(self._context, STR_NAME_COLON+self._editCurrentMapName, 50, y);
+			self._renderText(STR_NAME_COLON+self._editCurrentMapName, 50, y);
 			if ( self._loadSaveMapHint ) {
 				y+=FONT_SIZE+HALF_FONT_SIZE;
 				y+=FONT_SIZE+HALF_FONT_SIZE;
-				self.font._renderText(self._context, STR_HINT_COLON+self._loadSaveMapHint, 50, y);
-			}
-		},
-		_drawLoad: function() {
-			var self = this;
-			var y = 50;
-			self.font._renderText(self._context, STR_LOAD_MAP, 50, y);
-			y+=FONT_SIZE+HALF_FONT_SIZE;
-			self.font._renderText(self._context, STR_NAME_COLON+self._editCurrentMapName, 50, y);
-			if ( self._loadSaveMapHint ) {
-				y+=FONT_SIZE+HALF_FONT_SIZE;
-				y+=FONT_SIZE+HALF_FONT_SIZE;
-				self.font._renderText(self._context, STR_HINT_COLON+self._loadSaveMapHint, 50, y);
+				self._renderText(STR_HINT_COLON+self._loadSaveMapHint, 50, y);
 			}
 		},
 
@@ -2794,19 +2817,29 @@
 				self._drawEnemies();
 				self._drawMenu();
 			} else if ( self._state === Game._STATE_LOADMAP ) {
-				self._drawLoad();
+				self._drawLoadSave(STR_LOAD_MAP);
 			} else if ( self._state === Game._STATE_SAVEMAP ) {
-				self._drawSave();
+				self._drawLoadSave(STR_SAVE_MAP);
 			} else {
 				// render everything
 				self._drawElements();
 				self._drawEnemies();
-				self._drawHud();
 				self._player._render(self._context);
+				self._drawHud();
 			}
 		},
 
-		_startMenu: function( ) {
+		_startDeath: function( str ) {
+			var self = this;
+			// die!!!! :3
+			if ( str ) {
+				self._messages.push(new Message(this, str));
+			}
+			self._changeState(Game._STATE_GAMEOVER);
+			self._audioHandler._stopSequence(AUDIO_BG_MUSIC);
+			self._audioHandler._play(AUDIO_DEATH);
+		},
+		_startMenu: function() {
 			var self = this;
 			// menu map :
 			var menuMap = {map:[7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,8,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,7,0,0,0,0,0,0,0,0,0,0,0,0,0,0,7,8,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,7,0,0,0,0,0,0,0,0,0,0,0,0,2,0,7,8,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,7,0,0,0,0,0,0,0,0,0,0,0,3,0,3,7,8,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,7,0,0,0,0,0,0,0,0,0,0,0,3,0,3,7,8,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,7,0,0,0,0,0,0,0,0,0,0,3,3,0,1,7,8,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,7,0,0,0,0,0,0,0,0,0,0,0,0,1,5,7,8,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,7,0,0,0,0,0,0,0,0,2,0,4,1,5,1,7,8,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,7,0,0,0,0,0,0,0,0,0,0,1,5,1,6,7,8,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,7,0,10,8,8,8,8,8,8,8,1,1,5,1,5,7,8,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,7,5,5,5,5,5,5,5,5,5,4,5,5,5,5,7,8,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,8,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5],gemTarget:0,playerX:0,playerY:0};
@@ -2818,12 +2851,8 @@
 
 		_start: function( mapObj ) {
 			var self = this;
-
-			self._startTime = new Date().getTime();
-
+			self._timeElapsedMs = 0;
 			self._messages = [];
-			//self._messages.push(new Message(this, 'Welcome..', 300));
-			//self._messages.push(new Message(this, '...to the jungle..', 300));
 
 			self._audioHandler._stopSequence(AUDIO_BG_MUSIC);
 			self._audioHandler._playSequence(AUDIO_BG_MUSIC);
@@ -2838,7 +2867,8 @@
 
 		_startEdit: function( map ) {
 			var self = this;
-			self._startTime = new Date().getTime();
+			self._timeElapsedMs = 0;
+			self._messages = [];
 
 			if ( map ) {
 				self._readMap(map);

@@ -7,6 +7,12 @@ echo;
 echo ---------------------------------------
 echo Minifying Js
 echo ---------------------------------------
+echo uglifyjs --compress --mangle --mangle-props --mangle-regex="/^_/" --o src/lib/jsfxr.min.js -- src/lib/jsfxr.js
+call uglifyjs --compress --mangle --mangle-props --mangle-regex="/^_/" --o src/lib/jsfxr.min.js -- src/lib/jsfxr.js
+
+echo uglifyjs --compress --mangle --mangle-props --mangle-regex="/^_/" --o src/lib/sequencer.min.js -- src/lib/sequencer.js
+call uglifyjs --compress --mangle --mangle-props --mangle-regex="/^_/" --o src/lib/sequencer.min.js -- src/lib/sequencer.js
+
 echo uglifyjs --compress --mangle --mangle-props --mangle-regex="/^_/" --o src/game.min.js -- src/game.js
 call uglifyjs --compress --mangle --mangle-props --mangle-regex="/^_/" --o src/game.min.js -- src/game.js
 

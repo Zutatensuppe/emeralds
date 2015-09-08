@@ -11,19 +11,17 @@ function base64ToArrayBuffer(base64) {
 function Sequencer(opts){
 	var _this = this;
 	var position = 0;
-	var isMuted = false;
 	var loop = 0;
 	var ctx = new (window.AudioContext || webkitAudioContext)();
-	_this.buffer = opts.buffer || 0.2;
-	_this.loopSpeed = opts.loopSpeed;
-
+	_this._buffer = opts.buffer || 0.2;
+	_this._loopSpeed = opts.loopSpeed;
 
 	var gainNode = ctx.createGain();
 	gainNode.connect(ctx.destination);
 	var gainInterval = null;
 
 
-	this.currentSources = [];
+	this._currentSources = [];
 
 	var instruments, song, startTime;
 
@@ -68,9 +66,9 @@ function Sequencer(opts){
 		source.connect(gainNode); // connect to gainNode in order to be able to mute the audio
 		source.start(time || 0);
 		// push source to all sources array to be able to stop
-		_this.currentSources.push(source);
+		_this._currentSources.push(source);
 		source.onended = function(e) {
-			_this.currentSources.forEach(function(src, idx, arr) {
+			_this._currentSources.forEach(function(src, idx, arr) {
 				if ( src === e.srcElement ) {
 					arr.splice(idx,1);
 					return false;
@@ -80,7 +78,6 @@ function Sequencer(opts){
 	}
 
 	this.mute = function( mute ) {
-		this.isMuted = mute;
 
 		if ( mute ) {
 			if ( gainInterval ) {
@@ -105,7 +102,7 @@ function Sequencer(opts){
 		var _this = this;
 		var i;
 		var instrument;
-		_this.interval = setInterval(function(){
+		_this._interval = setInterval(function(){
 			if(!startTime){
 				startTime = ctx.currentTime;
 			}
@@ -117,7 +114,6 @@ function Sequencer(opts){
 
 				// Wrap our loop around/finish it up.
 				if(position >= song.length){
-					console.log(song.length);
 					if(opts.loop){
 						position = 0;
 						loop++;
@@ -136,10 +132,10 @@ function Sequencer(opts){
 
 				// The point at which this set of sounds is to be played.
 				// Based on start time, position in song, and number of loops.
-				var playAt = startTime + (_this.loopSpeed*position + song.length*loop*_this.loopSpeed)/1000;
+				var playAt = startTime + (_this._loopSpeed*position + song.length*loop*_this._loopSpeed)/1000;
 
 				// If the buffer is more than 1.4 seconds, stop populating it.
-				if(playAt > ctx.currentTime + _this.buffer){
+				if(playAt > ctx.currentTime + _this._buffer){
 					//console.log('Buffer full');
 					break;
 				}
@@ -150,23 +146,23 @@ function Sequencer(opts){
 				}
 				position++;
 			}
-		}, this.buffer*500);
+		}, this._buffer*500);
 		return _this;
 	};
 
 	this.stop = function(letPlayToEnd){
 		var _this = this;
-		if(_this.interval){
-			clearInterval(_this.interval);
-			_this.interval = false;
+		if(_this._interval){
+			clearInterval(_this._interval);
+			_this._interval = false;
 		}
 
 		if ( !letPlayToEnd ) {
-			_this.currentSources.forEach(function(source) {
+			_this._currentSources.forEach(function(source) {
 				source.stop();
 			});
 		}
-		_this.currentSources = [];
+		_this._currentSources = [];
 		position = 0;
 		startTime = ctx.currentTime;
 		return _this;
