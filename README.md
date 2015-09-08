@@ -6,13 +6,10 @@ Entry to [http://js13kgames.com] 2015 :)
 ## Minify Settings
 
 ### JS
-`uglifyjs --compress --mangle --mangle-props --mangle-regex="/^_/" --o game.min.js -- game.js`
+See build.cmd
 
 ### ZIP (7Zip)
- - Compression: Ultra
- - Mode: PPMd
- - Dictionary size: 256MB
- - Word size: 12
+See build.cmd
 
 ### PNG (Gimp)
 
