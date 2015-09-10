@@ -497,7 +497,6 @@
 		self._dirY = 0;
 		self._speed = OBJECT_SPEED;
 		self._stepsPerTile = TILE_SIZE/self._speed;
-		self._substep = 0;
 		self._isWalkable = false;
 		self._isPushable = false;
 		self._isSlippery = false;
@@ -507,6 +506,17 @@
 		self._wasFalling = false;
 		self._ticks = 0;
 	}
+	Entity[PROTO]._removeFromGame = function() {
+
+		var self = this;
+		self._game._elements.forEach(function(item, idx, arr) {
+			if ( item === self ) {
+				delete arr[idx];
+				self._game._setElementAtIndex(idx, null);
+				//arr.splice(idx, 1);
+			}
+		});
+	};
 	Entity[PROTO]._getActualPosition = function() {
 		return {
 			x: (this._x/TILE_SIZE + 0.5) | 0,
@@ -533,18 +543,23 @@
 
 		var pos = self._getActualPosition();
 
-		if ( self._canFall && self._substep === 0 ) {
+		if ( self._canFall && self._x % TILE_SIZE === 0 && self._y % TILE_SIZE === 0 ) {
 			// get element below the stone:
 			var elBelow = self._game._getElementAtPos(pos.x, pos.y+1);
 
-			if ( elBelow === null && (self._wasFalling || !self._game._anyMobileEntityAt(pos.x, pos.y+1)) ) {
+			if ( elBelow === null && (self._wasFalling || !self._game._anyMobileEntityOverlapsRect({
+					x: self._x,
+					y: self._y+TILE_SIZE,
+					w: TILE_SIZE,
+					h: TILE_SIZE
+				})) ) {
 				// let the stone fall down
 				self._dirY = 1;
 				self._dirX = 0;
 				self._isFalling = true;
 				self._wasFalling = false;
 				if ( ! self instanceof Bomb || ! self._wasFalling ) {
-					self._game._setElementAtIndex(pos.y*MAP_SIZE_X + MAP_SIZE_X + pos.x, new Dummy(self)); // item will fall there eventually!
+					//self._game._setElementAtIndex(pos.y*MAP_SIZE_X + MAP_SIZE_X + pos.x, new Dummy(self)); // item will fall there eventually!
 				}
 
 			} else if ( typeof elBelow !== UNDEF && elBelow !== null && elBelow._isSlippery && !self._isFalling ) {
@@ -553,29 +568,49 @@
 				var elLeftBelow = self._game._getElementAtPos(pos.x-1, pos.y+1);
 				if ( elLeft === null
 					&& elLeftBelow === null
-					&& !(self._game._anyMobileEntityAt(pos.x-1, pos.y))
-					&& !(self._game._anyMobileEntityAt(pos.x-1, pos.y+1))
+					&& !(self._game._anyMobileEntityOverlapsRect({
+						x: self._x-TILE_SIZE,
+						y: self._y,
+						w: TILE_SIZE,
+						h: TILE_SIZE
+					}))
+					&& !(self._game._anyMobileEntityOverlapsRect({
+						x: self._x-TILE_SIZE,
+						y: self._y+TILE_SIZE,
+						w: TILE_SIZE,
+						h: TILE_SIZE
+					}))
 					) {
 					self._dirX = -1;
 					self._dirY = 0;
 					self._isFalling = true;
 					if ( ! self instanceof Bomb || ! self._wasFalling ) {
-						self._game._setElementAtIndex(pos.y*MAP_SIZE_X + pos.x-1, new Dummy(self)); // item will fall there eventually!
+						//self._game._setElementAtIndex(pos.y*MAP_SIZE_X + pos.x-1, new Dummy(self)); // item will fall there eventually!
 					}
 				} else {
 					var elRight =  self._game._getElementAtPos(pos.x+1, pos.y);
 					var elRightBelow = self._game._getElementAtPos(pos.x+1, pos.y+1);
 					if ( elRight === null
 						&& elRightBelow === null
-						&& !(self._game._anyMobileEntityAt(pos.x+1, pos.y))
-						&& !(self._game._anyMobileEntityAt(pos.x+1, pos.y+1))
+						&& !(self._game._anyMobileEntityOverlapsRect({
+							x: self._x+TILE_SIZE,
+							y: self._y,
+							w: TILE_SIZE,
+							h: TILE_SIZE
+						}))
+						&& !(self._game._anyMobileEntityOverlapsRect({
+							x: self._x+TILE_SIZE,
+							y: self._y+TILE_SIZE,
+							w: TILE_SIZE,
+							h: TILE_SIZE
+						}))
 						) {
 						self._dirX = 1;
 						self._dirY = 0;
 						self._isFalling = true;
 
 						if ( ! self instanceof Bomb || ! self._wasFalling ) {
-							self._game._setElementAtIndex(pos.y*MAP_SIZE_X + pos.x+1, new Dummy(self)); // item will fall there eventually!
+							//self._game._setElementAtIndex(pos.y*MAP_SIZE_X + pos.x+1, new Dummy(self)); // item will fall there eventually!
 						}
 					}
 				}
@@ -601,9 +636,8 @@
 		}
 
 		self._move();
-		self._substep = self._substep < self._stepsPerTile-1 ? self._substep+1 : 0;
 
-		if ( self._substep > 0 ) {
+		if ( !(self._x % TILE_SIZE === 0 && self._y % TILE_SIZE === 0) ) {
 			return;
 		}
 
@@ -618,7 +652,7 @@
 
 		pos = self._getActualPosition();
 
-		self._game._deleteElementAtIndex(idx);
+		self._removeFromGame();
 		self._game._setElementAtIndex(self._game._posToIndex(pos), self);
 
 	};
@@ -683,18 +717,52 @@
 	Enemy[PROTO]._canMove = function() {
 		var self = this;
 		var canMove = self._dirX !== 0 || self._dirY !== 0;
-		if ( self._substep === 0 ) {
 
-			var pos = self._getActualPosition();
+		var pos = self._getActualPosition();
 
-			// enemy started moving. lets see if he hits the bounds of the map or hit an obstacle
-			if ( self._x+self._dirX < 0 || self._x+self._dirX > MAP_SIZE_X*TILE_SIZE-TILE_SIZE
-				|| self._y+self._dirY < 0 || self._y+self._dirY > MAP_SIZE_Y*TILE_SIZE-TILE_SIZE
-				|| self._game._getElementAtPos(pos.x+self._dirX, pos.y+self._dirY) !== null
-			) {
-				canMove = false;
-			}
+		// enemy started moving. lets see if he hits the bounds of the map or hit an obstacle
+		if ( self._x+self._dirX < 0 || self._x+self._dirX > MAP_SIZE_X*TILE_SIZE-TILE_SIZE
+			|| self._y+self._dirY < 0 || self._y+self._dirY > MAP_SIZE_Y*TILE_SIZE-TILE_SIZE
+			//|| self._game._getElementAtPos(pos.x+self._dirX, pos.y+self._dirY) !== null
+		) {
+			canMove = false;
+		}
 
+
+		if ( canMove ) {
+			self._game._elements.forEach(function(el) {
+				if ( el === null ) {return;}
+				var rect = {
+					x: self._x+self._dirX*self._speed,
+					y: self._y+self._dirY*self._speed,
+					w: self._w,
+					h: self._h
+				};
+
+				if ( self._game._overlapsRectItem(rect, el) ) {
+					canMove = false;
+				}
+			});
+		}
+
+		//if still can move, check if tehre is another enemy, they cant walk through each other!
+		if ( canMove ) {
+			self._game._enemies.forEach(function(other) {
+				if ( other === self ) { return; }
+
+				// check if the other enemy will collide
+				var rect = {
+					x: self._x+self._dirX*self._speed,
+					y: self._y+self._dirY*self._speed,
+					w: self._w,
+					h: self._h
+				};
+
+				if ( self._game._overlapsRectItem(rect, other) ) {
+					canMove = false;
+				}
+
+			});
 		}
 		return canMove;
 	};
@@ -717,15 +785,10 @@
 
 		if ( self._canMove() ) {
 			self._move();
-			// enemy moves each field in 8 steps
-			self._substep = self._substep < self._stepsPerTile-1 ? self._substep+1 : 0;
 		} else {
 			// this means the unit hit some kind of obstacle or end of map..
 			// stop moving and stay there for some ticks:
-			self._ticktick = 10;
-			self._substep = 0;
-			//self.dirX = 0;
-			//self.dirY = 0;
+			self._ticktick = self._speed;
 			self._hitObstacle();
 		}
 	};
@@ -774,6 +837,7 @@
 	function Niki(g, x, y) {
 		Enemy[PROTO][CONSTRUCTOR].call(this, g, g._elementGraphics[ENEMY_NIKI], x, y, TILE_SIZE, TILE_SIZE);
 		this._dir = -1;
+		//this._hasStopped = true;
 	}
 	Niki[PROTO] = ObjCreate(Enemy[PROTO]);
 	Niki[PROTO][CONSTRUCTOR] = Niki;
@@ -800,12 +864,7 @@
 	};
 	Niki[PROTO]._determineDirection = function() {
 
-		// check if there is a wall at direction, if yes, turn left
 		var self = this;
-		if ( self._substep > 0 ) {
-			return;
-		}
-
 		if ( self._dirX < 0 ) {
 			self._dirY = 0;
 		} else if ( self._dirX > 0 ) {
@@ -815,7 +874,6 @@
 		} else if ( self._dirY > 0 ) {
 			self._dirX = 0;
 		}
-
 
 		var pos = self._getActualPosition();
 		if ( self._dir === -1 ) {
@@ -861,47 +919,134 @@
 			}
 
 		}
-		if ( self._dirX === 0 && self._dirY === 0 ) {
-			self._dirX = -1;
-		}
 
+		//if ( self._hasStopped ) {
+		//	debugger;
 
-
-		var canMoveForward = false;
-		nextEl = self._game._getElementAtPos(pos.x+self._dirX, pos.y+self._dirY);
-		if ( nextEl === null ) {
-			// can move forward...
-			canMoveForward = true;
-		}
-		//self.turnRight();
-		if ( self._dir === 1 ) {
-			self._turnRight();
-		} else if ( self._dir === 0 ) {
-			self._turnLeft();
-		}
-		var canMoveSide = false;
-		nextEl = self._game._getElementAtPos(pos.x+self._dirX, pos.y+self._dirY);
-
-		if ( nextEl === null ) {
-			canMoveSide = true;
-		} // else keep current direction
-
-		if ( canMoveSide ) {
-			// ok
-		} else if ( canMoveForward ) {
-			// turn back to previous direction
-			//self.turnLeft();
-			if ( self._dir === 1 ) {
-				self._turnLeft();
-			} else if ( self._dir === 0 ) {
-				self._turnRight();
+			if ( self._dirX === 0 && self._dirY === 0 ) {
+				//debugger;
+				self._dirX = -1;
 			}
-		} else {
-			self._turnLeft();
-			self._turnLeft();
-		}
 
-	};
+
+			self._hasStopped = false;
+
+
+			var canMoveForward = true;
+			// enemy started moving. lets see if he hits the bounds of the map or hit an obstacle
+			if ( self._x+self._dirX < 0 || self._x+self._dirX > MAP_SIZE_X*TILE_SIZE-TILE_SIZE
+				|| self._y+self._dirY < 0 || self._y+self._dirY > MAP_SIZE_Y*TILE_SIZE-TILE_SIZE
+				//|| self._game._getElementAtPos(pos.x+self._dirX, pos.y+self._dirY) !== null
+				) {
+				canMoveForward = false;
+			}
+
+			self._game._elements.forEach(function(el) {
+				if ( el === null ) {return;}
+				var rect = {
+					x: self._x+self._dirX*self._speed,
+					y: self._y+self._dirY*self._speed,
+					w: self._w,
+					h: self._h
+				};
+
+				if ( self._game._overlapsRectItem(rect, el) ) {
+					canMoveForward = false;
+				}
+			});
+
+
+			if ( canMoveForward ) {
+				self._game._enemies.forEach(function(el) {
+					if ( el === self ) {return;}
+					var rect = {
+						x: self._x+self._dirX*self._speed,
+						y: self._y+self._dirY*self._speed,
+						w: self._w,
+						h: self._h
+					};
+
+					if ( self._game._overlapsRectItem(rect, el) ) {
+						canMoveForward = false;
+					}
+				});
+			}
+
+
+			//self.turnRight();
+			if ( self._dir === 1 ) {
+				self._turnRight();
+			} else if ( self._dir === 0 ) {
+				self._turnLeft();
+			}
+			var canMoveSide = true;
+
+
+			if ( canMoveForward ) {
+				if ( self._x % TILE_SIZE === 0 && self._y % TILE_SIZE === 0 ) {
+					// ok
+				} else {
+					canMoveSide = false;
+				}
+			}
+
+			if ( canMoveSide ) {
+				// enemy started moving. lets see if he hits the bounds of the map or hit an obstacle
+				if ( self._x+self._dirX < 0 || self._x+self._dirX > MAP_SIZE_X*TILE_SIZE-TILE_SIZE
+					|| self._y+self._dirY < 0 || self._y+self._dirY > MAP_SIZE_Y*TILE_SIZE-TILE_SIZE
+				//|| self._game._getElementAtPos(pos.x+self._dirX, pos.y+self._dirY) !== null
+				) {
+					canMoveSide = false;
+				}
+			}
+			if ( canMoveSide ) {
+				self._game._elements.forEach(function(el) {
+					if ( el === null ) {return;}
+					var rect = {
+						x: self._x+self._dirX*self._speed,
+						y: self._y+self._dirY*self._speed,
+						w: self._w,
+						h: self._h
+					};
+
+					if ( self._game._overlapsRectItem(rect, el) ) {
+						canMoveSide = false;
+					}
+				});
+			}
+
+			if ( canMoveSide ) {
+				self._game._enemies.forEach(function(el) {
+					if ( el === self ) {return;}
+					var rect = {
+						x: self._x+self._dirX*self._speed,
+						y: self._y+self._dirY*self._speed,
+						w: self._w,
+						h: self._h
+					};
+
+					if ( self._game._overlapsRectItem(rect, el) ) {
+						canMoveSide = false;
+					}
+				});
+			}
+
+			if ( canMoveSide ) {
+				// ok
+			} else if ( canMoveForward ) {
+				// turn back to previous direction
+				//self.turnLeft();
+				if ( self._dir === 1 ) {
+					self._turnLeft();
+				} else if ( self._dir === 0 ) {
+					self._turnRight();
+				}
+			} else {
+				self._turnLeft();
+				self._turnLeft();
+			}
+		//}
+ 	};
 	Niki[PROTO]._render = function(context) {
 		var self = this;
 		var rotate = false;
@@ -924,6 +1069,12 @@
 			self._gfx._render(context, self._x - self._game._renderStartX, self._y - self._game._renderStartY);
 		}
 	};
+	//Niki[PROTO]._hitObstacle = function() {
+	//	var self = this;
+	//	//self._dirY = 0;
+	//	//self._dirX = 0;
+	//	//self._hasStopped = true;
+	//};
 
 
 
@@ -1055,7 +1206,7 @@
 	Explosion[PROTO].update = function(idx) {
 		var self = this;
 		if ( --self._ticktick === 0 ) {
-			self._game._deleteElementAtIndex(idx);
+			self._removeFromGame();
 		}
 	};
 
@@ -1079,13 +1230,13 @@
 
 	/* Dummy
 	 ===============================================================*/
-	function Dummy(ref) {
-		Entity[PROTO][CONSTRUCTOR].call(this, ref._game, null, ref._x, ref._y, TILE_SIZE, TILE_SIZE);
-		this._isWalkable = ref._isWalkable;
-		this._ref = ref;
-	}
-	Dummy[PROTO] = ObjCreate(Entity[PROTO]);
-	Dummy[PROTO][CONSTRUCTOR] = Dummy;
+	//function Dummy(ref) {
+	//	Entity[PROTO][CONSTRUCTOR].call(this, ref._game, null, ref._x, ref._y, TILE_SIZE, TILE_SIZE);
+	//	this._isWalkable = ref._isWalkable;
+	//	this._ref = ref;
+	//}
+	//Dummy[PROTO] = ObjCreate(Entity[PROTO]);
+	//Dummy[PROTO][CONSTRUCTOR] = Dummy;
 
 	/* Door
 	===================================================================*/
@@ -1110,7 +1261,6 @@
 		var currentGfx = self._gfx;
 		if ( (self._game._state === Game._STATE_GAME || self._game._state === Game._STATE_EDIT) && self._isOpen ) {
 			currentGfx = self._gfxOpen[self._game._ticks % 32 < 16 ? 1 : 0];
-			//self.frame = ( self.substep > self.stepsPerTile / 2 ) ? 1 : 0;
 		}
 		currentGfx._render(context, self._x - self._game._renderStartX, self._y - self._game._renderStartY);
 	};
@@ -1678,34 +1828,6 @@
 				self._rElements[idx] = rel;
 			}
 		},
-		_deleteElementAtIndex: function(idx) {
-
-			var self = this;
-			if ( self._elements.length <= idx || idx < 0 ) {
-				return;
-			}
-
-			var el = self._elements[idx];
-			// remove all dummies
-			self._elements.forEach(function(item, i) {
-				if ( item instanceof Dummy && item._ref === el ) {
-					delete self._elements[i];
-					self._setElementAtIndex(i, null);
-				}
-			});
-			var rEl = self._rElements[idx];
-			// remove all dummies
-			self._rElements.forEach(function(item, i) {
-				if ( item instanceof Dummy && item._ref === rEl ) {
-					delete self._rElements[i];
-					self._setElementAtIndex(i, null);
-				}
-			});
-
-			delete self._elements[idx];
-			//delete this._rElements[idx];
-			self._setElementAtIndex(idx, null);
-		},
 		_getElementAtPos: function(x, y) {
 			var self = this;
 
@@ -1831,7 +1953,6 @@
 		},
 		_drawBackground: function() {
 			var self = this;
-			var i;
 			self._context.fillStyle = '#000';
 			self._context.fillRect(0,0, self._canvas.width, self._canvas.height);
 
@@ -2059,7 +2180,7 @@
 					self._changeState(Game._STATE_SAVEMAP);
 				}
 
-				if ( self._player._substep === 0 ) {
+				if ( self._player._x % TILE_SIZE === 0 && self._player._y % TILE_SIZE === 0 ) {
 
 					self._player._dirX = 0;
 					self._player._dirY = 0;
@@ -2105,7 +2226,7 @@
 			}
 			/* GAME
 			=========================================================================== */
-			else if ( self._state === Game._STATE_GAME && self._player._substep === 0 ) {
+			else if ( self._state === Game._STATE_GAME && self._player._x % TILE_SIZE === 0 && self._player._y % TILE_SIZE === 0 ) {
 
 				self._player._dirX = 0;
 				self._player._dirY = 0;
@@ -2177,7 +2298,7 @@
 				return;
 			}
 
-			var chkEl = el instanceof Dummy ? el._ref : el;
+			var chkEl = el; // instanceof Dummy ? el._ref : el;
 
 			// if there is already an explosion, continue
 			if ( chkEl instanceof Explosion ) {
@@ -2190,8 +2311,9 @@
 				self._createExplosion(x, y);
 			} else if ( chkEl !== null ) {
 				// delete original element
-				var pos = chkEl._getActualPosition();
-				self._deleteElementAtIndex(self._posToIndex(pos));
+				//var pos = chkEl._getActualPosition();
+				chkEl._removeFromGame();
+				//self._deleteElementAtIndex(self._posToIndex(pos));
 			}
 
 			// add explosion entity at the place
@@ -2224,17 +2346,16 @@
 		},
 
 
-		_anyMobileEntityAt: function(x, y){
+		_anyMobileEntityOverlapsRect: function(rect){
 			var self = this;
-			var playerPos = self._player._getActualPosition();
-			var _anyMobileEntityAt = playerPos.x === x && playerPos.y === y;
-			if ( !_anyMobileEntityAt ) {
+
+			var overlaps = self._overlapsRectItem(rect, self._player);
+			if ( !overlaps ) {
 				self._enemies.forEach(function(enemy) {
-					var p = enemy._getActualPosition();
-					_anyMobileEntityAt = _anyMobileEntityAt || p.x === x && p.y === y;
+					overlaps = overlaps || self._overlapsRectItem(rect, enemy);
 				});
 			}
-			return _anyMobileEntityAt;
+			return overlaps;
 		},
 
 		_update: function() {
@@ -2279,7 +2400,7 @@
 
 			var player = self._player;
 
-			if ( player._reverseHit && player._substep === 0 ) {
+			if ( player._reverseHit && player._x % TILE_SIZE === 0 && player._y % TILE_SIZE === 0 ) {
 
 				var playerPos = player._getActualPosition();
 				var x, y;
@@ -2301,9 +2422,7 @@
 			// if player has any direction, he can possible move, otherwise he cant
 			var canMove = player._dirX !== 0 || player._dirY !== 0;
 
-			if ( canMove && player._substep === 0 ) {
-				// only if player is in substep 0, he can start moving so only then we have to check for map bounds etc.
-
+			if ( canMove && player._x % TILE_SIZE === 0 && player._y % TILE_SIZE === 0 ) {
 				// check if player hits boundry of map
 				if ( player._x+player._dirX < 0 || player._x+player._dirX > MAP_SIZE_X*TILE_SIZE-TILE_SIZE
 					|| player._y+player._dirY < 0 || player._y+player._dirY > MAP_SIZE_Y*TILE_SIZE-TILE_SIZE
@@ -2331,7 +2450,21 @@
 						// player is moving horizontally and nextel is pushable
 						// check next next element => only if it is null can the player move
 						// ok
-						if ( nextEl._dirX === 0 && nextEl._dirY === 0 ) {
+
+						var rect = {
+							x: player._x+player._dirX*TILE_SIZE+player._dirX*TILE_SIZE,
+							y: player._y,
+							w: TILE_SIZE,
+							h: TILE_SIZE
+						};
+						// check if there is an enemy there...
+						self._enemies.forEach(function(enemy) {
+							if ( self._overlapsRectItem(rect, enemy) ) {
+								canMove = false;
+							}
+						});
+
+						if ( canMove === true && nextEl._dirX === 0 && nextEl._dirY === 0 ) {
 							nextEl._dirX = player._dirX;
 						}
 					} else {
@@ -2344,8 +2477,8 @@
 
 			if ( canMove ) {
 				player._move();
-				player._substep = player._substep < player._stepsPerTile-1 ? player._substep+1 : 0;
-				if ( player._substep === 0 ) {
+				//player._substep = player._substep < player._stepsPerTile-1 ? player._substep+1 : 0;
+				if ( player._x % TILE_SIZE === 0 && player._y % TILE_SIZE === 0 ) {
 					self._audioHandler._play(AUDIO_WALK);
 				}
 			}
@@ -2355,7 +2488,7 @@
 				// check element collisions
 				elementsToUpdate.forEach(function(element) {
 					// if the thing is null or was not falling, dont check collisions
-					if ( element === null || !element._wasFalling ) {
+					if ( element === null || (!element._wasFalling && !element._isFalling) ) {
 						return;
 					}
 
@@ -2365,7 +2498,6 @@
 						return;
 					}
 
-					// when the thing is falling and collided with an enemy, let the enemy die!
 					self._enemies.forEach(function(enemy, idx, arr) {
 						if ( element._x > enemy._x || !self._overlaps(element, enemy) ) {
 							return;
@@ -2373,7 +2505,8 @@
 						arr.splice(idx,1);
 
 						var p = element._getActualPosition();
-						self._setElementAtIndex(self._posToIndex(p), null);
+						//self._setElementAtIndex(self._posToIndex(p), null);
+						element._removeFromGame();
 						p = enemy._getActualPosition();
 						if ( element instanceof Bomb ) {
 							self._createExplosion(p.x, p.y);
@@ -2406,7 +2539,7 @@
 
 
 				var playerPosAfter = player._getActualPosition();
-				var elIndex = self._posToIndex(playerPosAfter);
+				//var elIndex = self._posToIndex(playerPosAfter);
 				var elAtPlayer= self._getElementAtPos(playerPosAfter.x, playerPosAfter.y);
 				if ( elAtPlayer === null ) {
 				} else if ( elAtPlayer._isDeadly ) {
@@ -2415,19 +2548,21 @@
 
 				} else if ( elAtPlayer instanceof Grass ) {
 
-					self._deleteElementAtIndex(elIndex);
+					elAtPlayer._removeFromGame();
+					//self._deleteElementAtIndex(elIndex);
 
 				} else if ( elAtPlayer instanceof Gem ) {
 
 					player._gemCount+= elAtPlayer._value;
-					self._deleteElementAtIndex(elIndex);
+					elAtPlayer._removeFromGame();
+					//self._deleteElementAtIndex(elIndex);
 					if ( player._gemCount >= self._gemTarget ) {
 						// open all doors
 						self._openDoors();
 					}
 					elAtPlayer._playCollectSound();
 
-				} else if ( player._substep === 0 && elAtPlayer instanceof Door && elAtPlayer._isOpen ) {
+				} else if ( player._x % TILE_SIZE === 0 && player._y % TILE_SIZE === 0 && elAtPlayer instanceof Door && elAtPlayer._isOpen ) {
 					// when player is on the door, he won the game! :p
 
 					// won
@@ -2441,6 +2576,16 @@
 			}
 
 
+		},
+
+
+		_overlapsRectItem: function( rect, item ) {
+			return (
+				rect.x < item._x+item._w
+				&& rect.x+rect.w > item._x
+				&& rect.y < item._y+item._h
+				&& rect.y+rect.h > item._y
+			);
 		},
 
 		_overlaps: function( item1, item2, threshold ) {
