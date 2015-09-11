@@ -1639,26 +1639,49 @@
 				playerY: 1
 			};
 
-			var perc = [
-				[1,ELEMENT_RUBY],
-				[20,ELEMENT_NULL],
-				[2,ELEMENT_BOMB],
-				[6,ELEMENT_EMERALD],
-				[5,ELEMENT_STONE],
-				[20,ELEMENT_GRASS],
-				[20,ELEMENT_LAVA],
-				[10,ELEMENT_WALL],
-				[1,ENEMY_NIKI],
-				[1,ENEMY_STRIDER]
+			var randomMapFillers = [
+				[ // random clutter
+					[1,ELEMENT_RUBY],
+					[20,ELEMENT_NULL],
+					[2,ELEMENT_BOMB],
+					[6,ELEMENT_EMERALD],
+					[5,ELEMENT_STONE],
+					[20,ELEMENT_GRASS],
+					[20,ELEMENT_LAVA],
+					[10,ELEMENT_WALL],
+					[1,ENEMY_NIKI],
+					[1,ENEMY_STRIDER]
+				],
+				[ // grassy fields
+					[20,ELEMENT_NULL],
+					[20,ELEMENT_GRASS],
+					[5,ELEMENT_STONE],
+					[1,ENEMY_NIKI]
+				],
+				[ // bombs galore
+					[10,ELEMENT_GRASS],
+					[1,ELEMENT_RUBY],
+					[5,ELEMENT_BOMB]
+				],
+				[ // lavaland
+					[3,ELEMENT_LAVA],
+					[1,ELEMENT_STONE],
+					[1,ELEMENT_WALL],
+					[1,ELEMENT_EMERALD],
+					//[5,ELEMENT_BOMB]
+				]
 			];
 
-
+			var i, j, cur;
+			var rnd = Math.random()*randomMapFillers.length | 0;
+			var perc = randomMapFillers[rnd];
 			var max = 0;
+			var mapString = '';
+
 			perc.forEach(function(item) {
 				max+=item[0];
 			});
-			var mapString = '';
-			for ( var i = 0; i < MAP_SIZE_Y*MAP_SIZE_X; i++ ) {
+			for ( i = 0; i < MAP_SIZE_Y*MAP_SIZE_X; i++ ) {
 				// border becomes wall tiles
 				if ( i < MAP_SIZE_X
 					|| i >= MAP_SIZE_Y*MAP_SIZE_X-MAP_SIZE_X
@@ -1671,12 +1694,13 @@
 					}
 					continue;
 				}
+
 				var did = false;
 				// grass at player pos
-				var rnd = Math.random()*max+1 | 0;
-				for ( var j = 0, cur = 0; j < perc.length; j++ ) {
+				rnd = Math.random()*max+1 | 0;
+				for ( j = 0, cur = 0; j < perc.length; j++ ) {
 					cur+= perc[j][0];
-					if ( rnd < cur ) {
+					if ( rnd <= cur ) {
 						mapString+=(perc[j][1]);
 						obj.map.push(perc[j][1]);
 						did = true;
