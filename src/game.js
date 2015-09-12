@@ -83,20 +83,6 @@
 	var ELEMENT_NULL = 8;
 	var ELEMENT_EXPLOSION = 9;
 
-	//
-	//var ELEMENT_GRASS_BORDER_TOP_LEFT = 20;
-	//var ELEMENT_GRASS_BORDER_TOP_RIGHT = 21;
-	//var ELEMENT_GRASS_BORDER_BOTTOM_LEFT = 22;
-	//var ELEMENT_GRASS_BORDER_BOTTOM_RIGHT = 23;
-	//var ELEMENT_LAVA_BORDER_TOP_LEFT = 24;
-	//var ELEMENT_LAVA_BORDER_TOP_RIGHT = 25;
-	//var ELEMENT_LAVA_BORDER_BOTTOM_LEFT = 26;
-	//var ELEMENT_LAVA_BORDER_BOTTOM_RIGHT = 27;
-	//var ELEMENT_NULL_BORDER_TOP_LEFT = 28;
-	//var ELEMENT_NULL_BORDER_TOP_RIGHT = 29;
-	//var ELEMENT_NULL_BORDER_BOTTOM_LEFT = 30;
-	//var ELEMENT_NULL_BORDER_BOTTOM_RIGHT = 31;
-
 	var ENEMY_STRIDER = 10;
 	var ENEMY_NIKI = 11;
 
@@ -119,13 +105,14 @@
 	var STR_EDIT_HELP_4 = 'Time Limit: T+Number+ENTER=set (in seconds) T+T=autoset';
 	var STR_STATUS_TEXT_GAMEOVER = 'Game over...';
 	var STR_STATUS_TEXT_WIN = 'A winner is you!';
-	var STR_STATUS_PAUSED = 'Paused';
 	var STR_ERROR_UNABLE_TO_SAVE_MAP = 'Unable to save map.';
 	var STR_HINT_PLEASE_ENTER_NAME = 'Please enter a name';
 	var STR_SAVED_AS_SPACE = 'Saved as ';
 	var STR_MSG_DOOR_OPENED = 'Door was opened!!';
 	var STR_DEATH_TIME_UP = 'Time up!';
 	var STR_DEATH_SLAIN = 'You have been slain!';
+	var STR_DEATH_KILLED = 'You have been killed!';
+	var STR_DEATH_ELEMENT_DEADLY = 'You stepped on something deadly!';
 
 
 	var MENU_START_GAME = 0;
@@ -487,25 +474,46 @@
 	===============================================================*/
 	function Entity( g, gfx, x, y, w, h ) {
 		var self = this;
+		// info
 		self._game = g;
 		self._gfx = gfx;
+		self._speed = OBJECT_SPEED;
+		self._stepsPerTile = TILE_SIZE/self._speed;
+		self._isWalkable = false;
+		self._isPushable = false;
+		self._isSlippery = false;
+		self._canFall = false;
+
+		// state
 		self._x = x;
 		self._y = y;
 		self._w = w;
 		self._h = h;
 		self._dirX = 0;
 		self._dirY = 0;
-		self._speed = OBJECT_SPEED;
-		self._stepsPerTile = TILE_SIZE/self._speed;
-		self._isWalkable = false;
-		self._isPushable = false;
-		self._isSlippery = false;
 		self._isDeadly = false;
-		self._canFall = false;
 		self._isFalling = false;
 		self._wasFalling = false;
 		self._ticks = 0;
 	}
+	Entity[PROTO]._isInGrid = function() {
+		return this._x % TILE_SIZE === 0 && this._y % TILE_SIZE === 0;
+	};
+	Entity[PROTO]._updateStateByEntity = function( entity ) {
+		var self = this;
+		self._x = entity._x;
+		self._y = entity._y;
+		self._w = entity._w;
+		self._h = entity._h;
+		self._dirX = entity._dirX;
+		self._dirY = entity._dirY;
+		self._stepsPerTile = entity._stepsPerTile;
+
+		//
+		self._isFalling = entity._isFalling;
+		self._wasFalling = entity._wasFalling;
+		self._ticks = entity._ticks;
+	};
 	Entity[PROTO]._removeFromGame = function() {
 
 		var self = this;
@@ -543,11 +551,11 @@
 
 		var pos = self._getActualPosition();
 
-		if ( self._canFall && self._x % TILE_SIZE === 0 && self._y % TILE_SIZE === 0 ) {
+		if ( self._canFall && self._isInGrid() ) {
 			// get element below the stone:
 			var elBelow = self._game._getElementAtPos(pos.x, pos.y+1);
 
-			if ( elBelow === null && (self._wasFalling || !self._game._anyMobileEntityOverlapsRect({
+			if ( elBelow === null && (self._wasFalling || !self._game._playerOrAnyEnemyOverlapsRect({
 					x: self._x,
 					y: self._y+TILE_SIZE,
 					w: TILE_SIZE,
@@ -568,13 +576,13 @@
 				var elLeftBelow = self._game._getElementAtPos(pos.x-1, pos.y+1);
 				if ( elLeft === null
 					&& elLeftBelow === null
-					&& !(self._game._anyMobileEntityOverlapsRect({
+					&& !(self._game._playerOrAnyEnemyOverlapsRect({
 						x: self._x-TILE_SIZE,
 						y: self._y,
 						w: TILE_SIZE,
 						h: TILE_SIZE
 					}))
-					&& !(self._game._anyMobileEntityOverlapsRect({
+					&& !(self._game._playerOrAnyEnemyOverlapsRect({
 						x: self._x-TILE_SIZE,
 						y: self._y+TILE_SIZE,
 						w: TILE_SIZE,
@@ -592,13 +600,13 @@
 					var elRightBelow = self._game._getElementAtPos(pos.x+1, pos.y+1);
 					if ( elRight === null
 						&& elRightBelow === null
-						&& !(self._game._anyMobileEntityOverlapsRect({
+						&& !(self._game._playerOrAnyEnemyOverlapsRect({
 							x: self._x+TILE_SIZE,
 							y: self._y,
 							w: TILE_SIZE,
 							h: TILE_SIZE
 						}))
-						&& !(self._game._anyMobileEntityOverlapsRect({
+						&& !(self._game._playerOrAnyEnemyOverlapsRect({
 							x: self._x+TILE_SIZE,
 							y: self._y+TILE_SIZE,
 							w: TILE_SIZE,
@@ -637,7 +645,7 @@
 
 		self._move();
 
-		if ( !(self._x % TILE_SIZE === 0 && self._y % TILE_SIZE === 0) ) {
+		if ( !self._isInGrid() ) {
 			return;
 		}
 
@@ -983,7 +991,7 @@
 
 
 			if ( canMoveForward ) {
-				if ( self._x % TILE_SIZE === 0 && self._y % TILE_SIZE === 0 ) {
+				if ( self._isInGrid() ) {
 					// ok
 				} else {
 					canMoveSide = false;
@@ -1151,6 +1159,7 @@
 		Gem[PROTO][CONSTRUCTOR].call(self, g, g._elementGraphics[ELEMENT_EMERALD], x, y, TILE_SIZE, TILE_SIZE);
 		self._value = 1;
 		self._collectSound = AUDIO_EMERALD;
+		self._canFall = true;
 		g._gemCount+=self._value;
 
 		// emerald sound
@@ -1172,6 +1181,7 @@
 		Gem[PROTO][CONSTRUCTOR].call(self, g, g._elementGraphics[ELEMENT_RUBY], x, y, TILE_SIZE, TILE_SIZE);
 		self._value = 5;
 		self._collectSound = AUDIO_RUBY;
+		self._canFall = true;
 		g._gemCount+=self._value;
 
 		// ruby sound
@@ -1309,7 +1319,7 @@
 
 		self._messages = [];
 
-		self._isReversed = false;
+		//self._isReversed = false;
 		self._isMuted = false;
 
 		self._enemies = [];
@@ -1599,24 +1609,8 @@
 			self._elementGraphics[ENEMY_NIKI] = new Gfx(self._sprite, 80, 80);
 			//
 			self._elementGraphics[ELEMENT_GRASS] = new Gfx(self._sprite, 48, 80);
-			//self._elementGraphics[ELEMENT_GRASS_BORDER_TOP_LEFT] = new Gfx(self._sprite, 64, 80, SPRITE_TILE_SIZE/2);
-			//self._elementGraphics[ELEMENT_GRASS_BORDER_TOP_RIGHT] = new Gfx(self._sprite, 72, 80, SPRITE_TILE_SIZE/2);
-			//self._elementGraphics[ELEMENT_GRASS_BORDER_BOTTOM_LEFT] = new Gfx(self._sprite, 64, 88, SPRITE_TILE_SIZE/2);
-			//self._elementGraphics[ELEMENT_GRASS_BORDER_BOTTOM_RIGHT] = new Gfx(self._sprite, 72, 88, SPRITE_TILE_SIZE/2);
-			//
-			//
 			self._elementGraphics[ELEMENT_LAVA] = new Gfx(self._sprite, 80, 64);
-			//self._elementGraphics[ELEMENT_LAVA_BORDER_TOP_LEFT] = new Gfx(self._sprite, 96, 64, SPRITE_TILE_SIZE/2);
-			//self._elementGraphics[ELEMENT_LAVA_BORDER_TOP_RIGHT] = new Gfx(self._sprite, 102, 64, SPRITE_TILE_SIZE/2);
-			//self._elementGraphics[ELEMENT_LAVA_BORDER_BOTTOM_LEFT] = new Gfx(self._sprite, 96, 72, SPRITE_TILE_SIZE/2);
-			//self._elementGraphics[ELEMENT_LAVA_BORDER_BOTTOM_RIGHT] = new Gfx(self._sprite, 102, 72, SPRITE_TILE_SIZE/2);
-			//
 			self._elementGraphics[ELEMENT_NULL] = new Gfx(self._sprite, 48, 64);
-			//self._elementGraphics[ELEMENT_NULL_BORDER_TOP_LEFT] = new Gfx(self._sprite, 64, 64, SPRITE_TILE_SIZE/2);
-			//self._elementGraphics[ELEMENT_NULL_BORDER_TOP_RIGHT] = new Gfx(self._sprite, 72, 64, SPRITE_TILE_SIZE/2);
-			//self._elementGraphics[ELEMENT_NULL_BORDER_BOTTOM_LEFT] = new Gfx(self._sprite, 64, 72, SPRITE_TILE_SIZE/2);
-			//self._elementGraphics[ELEMENT_NULL_BORDER_BOTTOM_RIGHT] = new Gfx(self._sprite, 72, 72, SPRITE_TILE_SIZE/2);
-
 		},
 		_changeState: function( toState ) {
 			var self = this;
@@ -1667,7 +1661,7 @@
 					[3,ELEMENT_LAVA],
 					[1,ELEMENT_STONE],
 					[1,ELEMENT_WALL],
-					[1,ELEMENT_EMERALD],
+					[1,ELEMENT_EMERALD]
 					//[5,ELEMENT_BOMB]
 				]
 			];
@@ -1729,13 +1723,13 @@
 			var self = this;
 			self._enemies = [];
 			self._elements = [];
-			self._rElements = [];
+			//self._rElements = [];
 			self._gemCount = 0;
-			self._isReversed = false;
+			//self._isReversed = false;
 
 			obj.map.forEach(function(item, i) {
 				self._elements.push(null);
-				self._rElements.push(null);
+				//self._rElements.push(null);
 				self._setElementAtIndexByCode(i, obj.map[i]);
 			});
 
@@ -1772,17 +1766,47 @@
 			}));
 			return true;
 		},
-		_setElementAtIndexByCode: function(idx, elCode, remvoveEnemy) {
-			var pos = this._indexToPos(idx);
-			this._setElementAtIndex(
-				idx,
-				this._elementCodeToElement(
-					elCode,
-					pos.x * TILE_SIZE,
-					pos.y * TILE_SIZE
-				),
-				remvoveEnemy
-			);
+		_setElementAtIndexByCode: function(idx, elCode, removeEnemy) {
+			this._setElementAtIndex(idx, this._elementCodeToElement(elCode, this._indexToPos(idx)), removeEnemy);
+		},
+		_createReverseElement: function( el, updateGameInfo ) {
+
+			var self = this;
+
+			var gemCount = self._gemCount;
+
+			var rel = null;
+			if ( el === null ) {
+				rel = null;
+			} else if ( el instanceof Lava ) {
+				rel = new Grass(self, 0, 0);
+				rel._updateStateByEntity(el);
+			} else if ( el instanceof Grass ) {
+				rel = new Lava(self, 0, 0);
+				rel._updateStateByEntity(el);
+			} else if ( el instanceof Bomb ) {
+				rel = new Ruby(self, 0, 0);
+				rel._updateStateByEntity(el);
+			} else if ( el instanceof Stone ) {
+				rel = new Emerald(self, 0, 0);
+				rel._updateStateByEntity(el);
+			} else if ( el instanceof Ruby ) {
+				rel = new Bomb(self, 0, 0);
+				rel._updateStateByEntity(el);
+			} else if ( el instanceof Emerald ) {
+				rel = new Stone(self, 0, 0);
+				rel._updateStateByEntity(el);
+			} else {
+				// everything else stays the same
+				// Explosion
+				// Door
+				// Wall
+				rel = el;
+			}
+			if ( !updateGameInfo ) {
+				self._gemCount = gemCount;
+			}
+			return rel;
 		},
 		_setReverseElementAtIndex: function(idx) {
 			var self = this;
@@ -1790,9 +1814,8 @@
 				return;
 			}
 
-			var tmp = self._elements[idx];
-			self._elements[idx] = self._rElements[idx];
-			self._rElements[idx] = tmp;
+			self._elements[idx] = self._createReverseElement(self._elements[idx], false);
+			//self._rElements[idx] = tmp;
 
 		},
 		_setElementAtIndex: function(idx, el, removeEnemy) {
@@ -1802,12 +1825,8 @@
 				return;
 			}
 
-			var rel = null;
-			var actualPos = self._indexToPos(idx);
-			var posX = actualPos.x * TILE_SIZE;
-			var posY = actualPos.y * TILE_SIZE;
-
 			if ( removeEnemy ) {
+				var actualPos = self._indexToPos(idx);
 				self._enemies.forEach(function(enemy, idx, arr) {
 					var ePos = enemy._getActualPosition();
 					if ( ePos.x === actualPos.x && ePos.y === actualPos.y ) {
@@ -1821,59 +1840,38 @@
 				el = null;
 			}
 
-
-			if ( el === null ) {
-				rel = null;
-			} else if ( el instanceof Lava ) {
-				rel = new Grass(self, posX, posY);
-			} else if ( el instanceof Grass ) {
-				rel = new Lava(self, posX, posY);
-			} else if ( el instanceof Bomb ) {
-				rel = new Ruby(self, posX, posY);
-			} else if ( el instanceof Stone ) {
-				rel = new Emerald(self, posX, posY);
-			} else if ( el instanceof Ruby ) {
-				rel = new Bomb(self, posX, posY);
-			} else if ( el instanceof Emerald ) {
-				rel = new Stone(self, posX, posY);
-			} else if ( el instanceof Explosion ) {
-				rel = new Explosion(self, posX, posY); // explosion are explosion
-			} else if ( el instanceof Door ) {
-				rel = new Door(self, posX, posY); // door are door
-			} else if ( el instanceof Wall ) {
-				rel = new Wall(self, posX, posY); // door are door
-			}
-
-			if ( self._isReversed ) {
-				self._elements[idx] = rel;
-				self._rElements[idx] = el;
-			} else {
-				self._elements[idx] = el;
-				self._rElements[idx] = rel;
-			}
+			self._elements[idx] = el;
 		},
 		_getElementAtPos: function(x, y) {
 			var self = this;
+
+			if ( typeof y === UNDEF ) {
+				y = x.y;
+				x = x.x;
+			}
 
 			if ( x < 0 || x >= MAP_SIZE_X || y < 0 || y >= MAP_SIZE_Y ) {
 				return undefined;
 			}
 
-			if ( self._isReversed ) {
-				return self._rElements[self._posToIndex(x,y)];
-			} else {
-				return self._elements[self._posToIndex(x,y)];
-			}
+			//if ( self._isReversed ) {
+			//	return self._rElements[self._posToIndex(x,y)];
+			//} else {
+			return self._elements[self._posToIndex(x,y)];
+			//}
 		},
 
 		_calcGemTarget: function( ) {
 			var _gemTarget = 0;
-			this._elements.forEach(function(item) {
+			var self = this;
+			self._elements.forEach(function(item) {
 				_gemTarget += item && item._value ? item._value : 0;
+				var revItem = self._createReverseElement(item);
+				_gemTarget += revItem && revItem._value ? revItem._value : 0;
 			});
-			this._rElements.forEach(function(item) {
-				_gemTarget += item && item._value ? item._value : 0;
-			});
+			//this._rElements.forEach(function(item) {
+			//	_gemTarget += item && item._value ? item._value : 0;
+			//});
 			return _gemTarget;
 		},
 
@@ -1886,12 +1884,12 @@
 					openedAnyDoor = true;
 				}
 			});
-			self._rElements.forEach(function(item) {
-				if ( item instanceof Door && !item._isOpen ) {
-					item.open();
-					openedAnyDoor = true;
-				}
-			});
+			//self._rElements.forEach(function(item) {
+			//	if ( item instanceof Door && !item._isOpen ) {
+			//		item.open();
+			//		openedAnyDoor = true;
+			//	}
+			//});
 			if ( openedAnyDoor ) {
 				self._messages.push(new Message(self, STR_MSG_DOOR_OPENED, 150));
 				self._audioHandler._play(AUDIO_OPENDOOR);
@@ -1927,9 +1925,12 @@
 			}
 			return ELEMENT_NULL;
 		},
-		_elementCodeToElement: function( elementCode, x, y ) {
+		_elementCodeToElement: function( elementCode, coordPos ) {
+
 			var self = this;
 			var ret = null;
+			var x = coordPos.x*TILE_SIZE;
+			var y = coordPos.y*TILE_SIZE;
 
 			switch ( elementCode ) {
 				case ELEMENT_GRASS: ret = new Grass(self, x, y); break;
@@ -1951,36 +1952,29 @@
 
 		_determineRenderStart: function() {
 			var self = this;
-			if ( self._player ) {
-				self._renderStartX = self._player._x - VISIBLE_WIDTH*HALF_TILE_SIZE;
-				self._renderStartY = self._player._y - VISIBLE_HEIGHT*HALF_TILE_SIZE;
-				if ( self._renderStartX < 0 ) {
-					self._renderStartX = 0;
-				}
-				if ( self._renderStartY < 0 ) {
-					self._renderStartY = 0;
-				}
-				if ( self._renderStartX+VISIBLE_WIDTH*TILE_SIZE > MAP_SIZE_X*TILE_SIZE ) {
-					self._renderStartX = MAP_SIZE_X*TILE_SIZE - VISIBLE_WIDTH*TILE_SIZE;
-				}
-				if ( self._renderStartY+VISIBLE_HEIGHT*TILE_SIZE > MAP_SIZE_Y*TILE_SIZE ) {
-					self._renderStartY = MAP_SIZE_Y*TILE_SIZE - VISIBLE_HEIGHT*TILE_SIZE;
-				}
+			if ( ! self._player ) {
+				return;
 			}
-		},
 
-		_pauseGame: function() {
-			this._state = Game._STATE_PAUSE;
-		},
-		_unpauseGame: function() {
-			this._state = Game._STATE_GAME;
+			self._renderStartX = self._player._x - VISIBLE_WIDTH*HALF_TILE_SIZE;
+			self._renderStartY = self._player._y - VISIBLE_HEIGHT*HALF_TILE_SIZE;
+			if ( self._renderStartX < 0 ) {
+				self._renderStartX = 0;
+			}
+			if ( self._renderStartY < 0 ) {
+				self._renderStartY = 0;
+			}
+			if ( self._renderStartX+VISIBLE_WIDTH*TILE_SIZE > MAP_SIZE_X*TILE_SIZE ) {
+				self._renderStartX = MAP_SIZE_X*TILE_SIZE - VISIBLE_WIDTH*TILE_SIZE;
+			}
+			if ( self._renderStartY+VISIBLE_HEIGHT*TILE_SIZE > MAP_SIZE_Y*TILE_SIZE ) {
+				self._renderStartY = MAP_SIZE_Y*TILE_SIZE - VISIBLE_HEIGHT*TILE_SIZE;
+			}
 		},
 		_drawBackground: function() {
 			var self = this;
 			self._context.fillStyle = '#000';
 			self._context.fillRect(0,0, self._canvas.width, self._canvas.height);
-
-			self._determineRenderStart();
 		},
 		_handleInput: function(){
 			var self = this;
@@ -2112,10 +2106,10 @@
 					/// fill the whole map with the current element type
 
 					self._elements = [];
-					self._rElements = [];
+					//self._rElements = [];
 					for ( i = 0; i < MAP_SIZE_Y*MAP_SIZE_X; i++ ) {
 						self._elements.push(null);
-						self._rElements.push(null);
+						//self._rElements.push(null);
 						self._setElementAtIndexByCode(i, self._allEditElements[self._editCurrentElement], 1);
 					}
 
@@ -2125,10 +2119,10 @@
 					/// fill the whole map with the current element type
 
 					self._elements = [];
-					self._rElements = [];
+					//self._rElements = [];
 					for ( i = 0; i < MAP_SIZE_Y*MAP_SIZE_X; i++ ) {
 						self._elements.push(null);
-						self._rElements.push(null);
+						//self._rElements.push(null);
 						self._setElementAtIndexByCode(i, ELEMENT_NULL, 1);
 					}
 				}
@@ -2204,7 +2198,7 @@
 					self._changeState(Game._STATE_SAVEMAP);
 				}
 
-				if ( self._player._x % TILE_SIZE === 0 && self._player._y % TILE_SIZE === 0 ) {
+				if ( self._player._isInGrid() ) {
 
 					self._player._dirX = 0;
 					self._player._dirY = 0;
@@ -2217,18 +2211,16 @@
 					} else if ( self._inputHandler._isDown(VK_RIGHT) ) {
 						self._player._dirX = 1;
 					}
+				}
 
-					if ( self._inputHandler._isPressed(VK_R) ) {
-						//self._isReversed = !self._isReversed;
-						self._player._reverseHit = true;
-						self._audioHandler._play(AUDIO_REVERSE);
-					}
+				if ( self._inputHandler._isPressed(VK_R) ) {
+					//self._isReversed = !self._isReversed;
+					self._player._reverseHit = true;
+					self._audioHandler._play(AUDIO_REVERSE);
 				}
 
 				//
 				if ( self._inputHandler._isPressed(VK_ESCAPE) ) {
-					// go to menu for now. later maybe add pause.
-					self._audioHandler._stopSequence(AUDIO_BG_MUSIC);
 					self._startMenu();
 				}
 
@@ -2239,7 +2231,7 @@
 
 				if ( self._inputHandler._isPressed(VK_ESCAPE) ) {
 					// go to menu for now. later maybe add pause.
-					self._unpauseGame();
+					self._changeState(Game._STATE_GAME);
 				}
 
 				if ( self._inputHandler._isPressed(VK_E) ) {
@@ -2250,7 +2242,7 @@
 			}
 			/* GAME
 			=========================================================================== */
-			else if ( self._state === Game._STATE_GAME && self._player._x % TILE_SIZE === 0 && self._player._y % TILE_SIZE === 0 ) {
+			else if ( self._state === Game._STATE_GAME && self._player._isInGrid() ) {
 
 				self._player._dirX = 0;
 				self._player._dirY = 0;
@@ -2272,20 +2264,17 @@
 
 				if ( self._inputHandler._isPressed(VK_ESCAPE) ) {
 					// go to menu for now. later maybe add pause.
-					self._pauseGame();
+					self._changeState(Game._STATE_PAUSE);
 				}
 
 			}
 			/* OTHER STATES
 			=========================================================================== */
 			else {
-
-
 				if ( self._inputHandler._isPressed(VK_ESCAPE) ) {
 					// go to menu for now. later maybe add pause.
 					self._startMenu();
 				}
-
 			}
 
 			if ( self._inputHandler._isPressed(VK_M) ) {
@@ -2313,7 +2302,7 @@
 
 			// check if we hit a bomb, if yes, explode them too
 
-			var el = self._getElementAtPos(x,y);
+			var el = self._getElementAtPos(x, y);
 
 			if ( typeof el === UNDEF ) {
 				return;
@@ -2322,21 +2311,21 @@
 				return;
 			}
 
-			var chkEl = el; // instanceof Dummy ? el._ref : el;
+			//var chkEl = el; // instanceof Dummy ? el._ref : el;
 
 			// if there is already an explosion, continue
-			if ( chkEl instanceof Explosion ) {
+			if ( el instanceof Explosion ) {
 				return;
 			}
 
 
 			// if there is a bomb, then create an explosion at the position where the thing will be falling to
-			if ( chkEl instanceof Bomb ) {
+			if ( el instanceof Bomb ) {
 				self._createExplosion(x, y);
-			} else if ( chkEl !== null ) {
+			} else if ( el !== null ) {
 				// delete original element
 				//var pos = chkEl._getActualPosition();
-				chkEl._removeFromGame();
+				el._removeFromGame();
 				//self._deleteElementAtIndex(self._posToIndex(pos));
 			}
 
@@ -2346,31 +2335,31 @@
 		},
 
 		// the x and y given to this function are coordinates, not real x y positions
-		_createExplosion: function(px, py) {
+		_createExplosion: function(coordX, coordY) {
 
 			var self = this;
 
 			// set desired place to explosion
-			self._setElementAtIndexByCode(self._posToIndex(px, py), ELEMENT_EXPLOSION);
+			self._setElementAtIndexByCode(self._posToIndex(coordX, coordY), ELEMENT_EXPLOSION);
 
 
 			// set surrounding places to explosions (maybe)
-			self._maybeCreateExplosion(px-1, py-1);
-			self._maybeCreateExplosion(px, py-1);
-			self._maybeCreateExplosion(px+1, py-1);
+			self._maybeCreateExplosion(coordX-1, coordY-1);
+			self._maybeCreateExplosion(coordX, coordY-1);
+			self._maybeCreateExplosion(coordX+1, coordY-1);
 
-			self._maybeCreateExplosion(px-1, py);
-			self._maybeCreateExplosion(px+1, py);
+			self._maybeCreateExplosion(coordX-1, coordY);
+			self._maybeCreateExplosion(coordX+1, coordY);
 
-			self._maybeCreateExplosion(px-1, py+1);
-			self._maybeCreateExplosion(px, py+1);
-			self._maybeCreateExplosion(px+1, py+1);
+			self._maybeCreateExplosion(coordX-1, coordY+1);
+			self._maybeCreateExplosion(coordX, coordY+1);
+			self._maybeCreateExplosion(coordX+1, coordY+1);
 
 			self._audioHandler._play(AUDIO_EXPLOSION);
 		},
 
 
-		_anyMobileEntityOverlapsRect: function(rect){
+		_playerOrAnyEnemyOverlapsRect: function(rect){
 			var self = this;
 
 			var overlaps = self._overlapsRectItem(rect, self._player);
@@ -2412,8 +2401,8 @@
 					enemy.update();
 				});
 
-				var elementsToUpdate = self._isReversed ? self._rElements : self._elements;
-				elementsToUpdate.forEach(function(item, idx) {
+				//var elementsToUpdate = self._isReversed ? self._rElements : self._elements;
+				self._elements.forEach(function(item, idx) {
 					if ( item === null ) {
 						return;
 					}
@@ -2424,12 +2413,11 @@
 
 			var player = self._player;
 
-			if ( player._reverseHit && player._x % TILE_SIZE === 0 && player._y % TILE_SIZE === 0 ) {
+			if ( player._reverseHit && player._isInGrid() ) {
 
 				var playerPos = player._getActualPosition();
-				var x, y;
-				x = playerPos.x;
-				y = playerPos.y;
+				var x = playerPos.x;
+				var y = playerPos.y;
 				self._setReverseElementAtIndex(self._posToIndex(x-1, y)); // left
 				self._setReverseElementAtIndex(self._posToIndex(x, y-1)); // top
 				self._setReverseElementAtIndex(self._posToIndex(x+1, y)); // right
@@ -2446,7 +2434,7 @@
 			// if player has any direction, he can possible move, otherwise he cant
 			var canMove = player._dirX !== 0 || player._dirY !== 0;
 
-			if ( canMove && player._x % TILE_SIZE === 0 && player._y % TILE_SIZE === 0 ) {
+			if ( canMove && player._isInGrid() ) {
 				// check if player hits boundry of map
 				if ( player._x+player._dirX < 0 || player._x+player._dirX > MAP_SIZE_X*TILE_SIZE-TILE_SIZE
 					|| player._y+player._dirY < 0 || player._y+player._dirY > MAP_SIZE_Y*TILE_SIZE-TILE_SIZE
@@ -2457,42 +2445,85 @@
 
 					var playerPos = player._getActualPosition();
 
-					var nextEl= self._getElementAtPos(playerPos.x+player._dirX, playerPos.y+player._dirY);
-					if ( typeof nextEl === UNDEF ) {
+					var rect = {
+						x: player._x+player._dirX*TILE_SIZE,
+						y: player._y+player._dirY*TILE_SIZE,
+						w: TILE_SIZE,
+						h: TILE_SIZE
+					};
+					var nextEls = [];
+					self._elements.forEach(function(item) {
+						if ( item === null ) {
+							return;
+						}
+						if ( self._overlapsRectItem(rect, item) && !item._isWalkable ) {
+							nextEls.push(item);
+						}
+					});
+
+					if ( nextEls.length === 0 ) {
+						// ok!
+					} else if ( nextEls.length > 1 ) {
+						// if there are more than 1 el, cant move
 						canMove = false;
-					} else if ( nextEl === null || nextEl._isWalkable ) {
-						// ok
-					} else if ( player._dirY !== 0 || !nextEl._isPushable ) {
-						// moving vertically, but in the direction of the player is some obstacle
+					} else {
+						var nextEl = nextEls[0];
 
-						// or else:
-						// we know now that the player is moving horizontally so we check if the
-						// element in player direction is pushable, if not the player cant move
+						// at least 1 element is there
+						if ( player._dirY !== 0 || !nextEl._isPushable || !nextEl._isInGrid() ) {
+							// moving vertically, but in the direction of the player is some obstacle
 
-						canMove = false;
-					} else if ( self._getElementAtPos(playerPos.x+player._dirX+player._dirX, playerPos.y) === null ) {
-						// player is moving horizontally and nextel is pushable
-						// check next next element => only if it is null can the player move
-						// ok
+							// or else:
+							// we know now that the player is moving horizontally so we check if the
+							// element in player direction is pushable, if not the player cant move
 
-						var rect = {
-							x: player._x+player._dirX*TILE_SIZE+player._dirX*TILE_SIZE,
-							y: player._y,
-							w: TILE_SIZE,
-							h: TILE_SIZE
-						};
-						// check if there is an enemy there...
-						self._enemies.forEach(function(enemy) {
-							if ( self._overlapsRectItem(rect, enemy) ) {
+							canMove = false;
+						} else {
+							// so, there is one element at the x direction
+							// lets check if there is another free space behind
+							rect = {
+								x: player._x+player._dirX*TILE_SIZE+player._dirX*TILE_SIZE,
+								y: player._y+player._dirY*TILE_SIZE+player._dirY*TILE_SIZE,
+								w: TILE_SIZE,
+								h: TILE_SIZE
+							};
+
+							if ( rect.x < 0 || rect.x+rect.w > MAP_SIZE_X*TILE_SIZE
+								|| rect.y < 0 || rect.y+rect.h > MAP_SIZE_Y*TILE_SIZE ) {
+								// oh no... out
 								canMove = false;
 							}
-						});
 
-						if ( canMove === true && nextEl._dirX === 0 && nextEl._dirY === 0 ) {
-							nextEl._dirX = player._dirX;
+							if ( canMove ) {
+								// check if there is an enemy there...
+								self._enemies.forEach(function(enemy) {
+									if ( self._overlapsRectItem(rect, enemy) ) {
+										canMove = false;
+									}
+								});
+							}
+
+							if ( canMove ) {
+								var nextNextEls = [];
+								self._elements.forEach(function(item) {
+									if ( item === null ) {
+										return;
+									}
+									if ( self._overlapsRectItem(rect, item) ) {
+										nextNextEls.push(item);
+									}
+								});
+								if ( nextNextEls.length > 0 ) {
+									canMove = false;
+								}
+							}
+
+							if ( canMove ) {
+								nextEl._dirX = player._dirX;
+							}
+
 						}
-					} else {
-						canMove = false;
+
 					}
 
 				}
@@ -2502,7 +2533,7 @@
 			if ( canMove ) {
 				player._move();
 				//player._substep = player._substep < player._stepsPerTile-1 ? player._substep+1 : 0;
-				if ( player._x % TILE_SIZE === 0 && player._y % TILE_SIZE === 0 ) {
+				if ( player._isInGrid() ) {
 					self._audioHandler._play(AUDIO_WALK);
 				}
 			}
@@ -2510,7 +2541,7 @@
 			if ( self._state === Game._STATE_GAME ) {
 
 				// check element collisions
-				elementsToUpdate.forEach(function(element) {
+				self._elements.forEach(function(element) {
 					// if the thing is null or was not falling, dont check collisions
 					if ( element === null || (!element._wasFalling && !element._isFalling) ) {
 						return;
@@ -2528,10 +2559,10 @@
 						}
 						arr.splice(idx,1);
 
-						var p = element._getActualPosition();
+						//var p = element._getActualPosition();
 						//self._setElementAtIndex(self._posToIndex(p), null);
 						element._removeFromGame();
-						p = enemy._getActualPosition();
+						var p = enemy._getActualPosition();
 						if ( element instanceof Bomb ) {
 							self._createExplosion(p.x, p.y);
 						} else {
@@ -2547,14 +2578,10 @@
 				self._enemies.forEach(function(enemy, idx, arr) {
 					if ( self._overlaps(enemy, self._player) ) {
 						// die!!!! :3
-						self._changeState(Game._STATE_GAMEOVER);
-						self._audioHandler._stopSequence(AUDIO_BG_MUSIC);
-						self._audioHandler._play(AUDIO_DEATH);
+						self._startDeath(STR_DEATH_KILLED);
 					}
 
-
-					var p = enemy._getActualPosition();
-					var elAtEntity= self._getElementAtPos(p.x, p.y);
+					var elAtEntity= self._getElementAtPos(enemy._getActualPosition());
 					if ( elAtEntity === null ) {
 					} else if ( elAtEntity._isDeadly ) {
 						arr.splice(idx,1);
@@ -2562,13 +2589,13 @@
 				});
 
 
-				var playerPosAfter = player._getActualPosition();
+				//var playerPosAfter = player._getActualPosition();
 				//var elIndex = self._posToIndex(playerPosAfter);
-				var elAtPlayer= self._getElementAtPos(playerPosAfter.x, playerPosAfter.y);
+				var elAtPlayer= self._getElementAtPos(player._getActualPosition());
 				if ( elAtPlayer === null ) {
 				} else if ( elAtPlayer._isDeadly ) {
 
-					self._startDeath();
+					self._startDeath(STR_DEATH_ELEMENT_DEADLY);
 
 				} else if ( elAtPlayer instanceof Grass ) {
 
@@ -2586,7 +2613,7 @@
 					}
 					elAtPlayer._playCollectSound();
 
-				} else if ( player._x % TILE_SIZE === 0 && player._y % TILE_SIZE === 0 && elAtPlayer instanceof Door && elAtPlayer._isOpen ) {
+				} else if ( player._isInGrid() && elAtPlayer instanceof Door && elAtPlayer._isOpen ) {
 					// when player is on the door, he won the game! :p
 
 					// won
@@ -2633,8 +2660,8 @@
 			var self=  this;
 			self._determineRenderStart();
 
-			var elementsToRender = self._isReversed ? self._rElements : self._elements;
-			elementsToRender.forEach(function(item, idx) {
+			//var elementsToRender = self._isReversed ? self._rElements : self._elements;
+			self._elements.forEach(function(item, idx) {
 				var pos = self._indexToPos(idx);
 				// item background:
 				self._elementGraphics[ELEMENT_NULL]._render(
@@ -2643,7 +2670,7 @@
 					pos.y * TILE_SIZE - self._renderStartY
 				);
 			});
-			elementsToRender.forEach(function(item, idx) {
+			self._elements.forEach(function(item, idx) {
 				if ( item === null
 					|| item._x < self._renderStartX-TILE_SIZE
 					|| item._x > self._renderStartX+VISIBLE_WIDTH*TILE_SIZE + TILE_SIZE
@@ -3018,6 +3045,17 @@
 			self._changeState(Game._STATE_MENU);
 		},
 
+		_startTutorial: function() {
+
+			//todo add tutorial map
+			// - show enemies
+			// - show how to reverse
+			// - show stuff that can fall
+			// - show bombs
+			var tutorialMap = {map:[7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,8,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,7,0,0,0,0,0,0,0,0,0,0,0,0,0,0,7,8,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,7,0,0,0,0,0,0,0,0,0,0,0,0,2,0,7,8,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,7,0,0,0,0,0,0,0,0,0,0,0,3,0,3,7,8,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,7,0,0,0,0,0,0,0,0,0,0,0,3,0,3,7,8,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,7,0,0,0,0,0,0,0,0,0,0,3,3,0,1,7,8,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,7,0,0,0,0,0,0,0,0,0,0,0,0,1,5,7,8,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,7,0,0,0,0,0,0,0,0,2,0,4,1,5,1,7,8,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,7,0,0,0,0,0,0,0,0,0,0,1,5,1,6,7,8,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,7,0,10,8,8,8,8,8,8,8,1,1,5,1,5,7,8,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,7,5,5,5,5,5,5,5,5,5,4,5,5,5,5,7,8,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,8,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5],gemTarget:0,playerX:0,playerY:0};
+			this._start(mapObj);
+		},
+
 		_start: function( mapObj ) {
 			var self = this;
 			self._timeElapsedMs = 0;
@@ -3043,13 +3081,13 @@
 				self._readMap(map);
 			} else {
 				self._elements = [];
-				self._rElements = [];
+				//self._rElements = [];
 				self._enemies = [];
 				self._gemCount = 0;
 				self._gemTarget = 0;
 				for ( var i = 0; i < MAP_SIZE_Y*MAP_SIZE_X; i++ ) {
 					self._elements.push(null);
-					self._rElements.push(null);
+					//self._rElements.push(null);
 				}
 				self._player = new Player(self, 0, 0);
 			}
