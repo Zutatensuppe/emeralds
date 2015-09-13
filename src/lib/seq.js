@@ -9,12 +9,24 @@ function base64ToArrayBuffer(base64) {
 }
 
 function Sequencer(opts){
+
+/*
+	// opts is an array must have 6 elements:
+	0: 250, // milliseconds per beat
+	1: INSTRUMENTS, // The Audio Elements
+	2: loops, // Loops
+	3: song, // The actual song
+	4: true, // Loop over and over
+	5: 1.4 // seconds buffer. ~min Chrome lets us have in a background tab
+*/
+	//console.log(opts);
+
 	var _this = this;
 	var position = 0;
 	var loop = 0;
 	var ctx = new (window.AudioContext || webkitAudioContext)();
-	_this._buffer = opts.buffer || 0.2;
-	_this._loopSpeed = opts.loopSpeed;
+	_this._buffer = opts[5] || 0.2;
+	_this._loopSpeed = opts[0];
 
 	var gainNode = ctx.createGain();
 	gainNode.connect(ctx.destination);
@@ -27,19 +39,19 @@ function Sequencer(opts){
 
 	this.initLoops = function(opts){
 		instruments = {};
-		Object.keys(opts.instruments).forEach(function(key){
-			ctx.decodeAudioData(base64ToArrayBuffer(opts.instruments[key]), function(buffer){
-				console.log('Setting', key, buffer);
+		Object.keys(opts[1]).forEach(function(key){
+			ctx.decodeAudioData(base64ToArrayBuffer(opts[1][key]), function(buffer){
+				//console.log('Setting', key, buffer);
 				instruments[key] = buffer;
 			});
 		});
 		// init loops
-		song = opts.song;
+		song = opts[3];
 		song = song.map(function(beat, i){
 			var newBeat = [];
 			beat.forEach(function(beat){
-				var loop = opts.loops[beat];
-				if(opts.instruments[beat.n || beat]){
+				var loop = opts[2][beat];
+				if(opts[1][beat.n || beat]){
 					// return this beat
 					newBeat.push(beat);
 				} else if(loop) {
@@ -113,18 +125,12 @@ function Sequencer(opts){
 
 				// Wrap our loop around/finish it up.
 				if(position >= song.length){
-					if(opts.loop){
+					if(opts[4]){
 						position = 0;
 						loop++;
-						if(opts.onComplete){
-							opts.onComplete();
-						}
 						continue;
 					} else {
 						_this.stop(true);
-						if(opts.onComplete){
-							opts.onComplete();
-						}
 						break;
 					}
 				}

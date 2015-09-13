@@ -52,11 +52,11 @@
 	var INSTRUMENT_WAVE = 4;
 	var INSTRUMENT_BEEP = 5;
 	var INSTRUMENTS = {};
-	INSTRUMENTS[INSTRUMENT_CYMBAL] = jsfxr([3,,0.18,,0.11,0.5,,,,,,,,0.29,,,,,1,,,0.1,,0.5]);
+	INSTRUMENTS[INSTRUMENT_CYMBAL] = jsfxr([3,,0.2,,0.1,0.5,,,,,,,,0.3,,,,,1,,,0.1,,0.5]);
 	//INSTRUMENTS[INSTRUMENT_DRUM] = jsfxr([3,,0.18,,0.11,0.17,,-0.58,,,,,,0.29,,,,,1,,,0.1,,0.5]);
-	INSTRUMENTS[INSTRUMENT_BASS] = jsfxr([0,,0.19,0.26,1,0.12,,0.02,,,,,,0.48,-0.18,,,,1,,,0.13,,0.5]);
-	INSTRUMENTS[INSTRUMENT_WAVE] = jsfxr([0,0,0.04,0.51,0.44,0.6,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0.4]);
-	INSTRUMENTS[INSTRUMENT_BEEP] = jsfxr([0,0,0.04,0.51,0.44,0.6,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0.2]);
+	INSTRUMENTS[INSTRUMENT_BASS] = jsfxr([0,,0.2,0.3,1,0.1,,0.02,,,,,,0.5,-0.2,,,,1,,,0.1,,0.5]);
+	INSTRUMENTS[INSTRUMENT_WAVE] = jsfxr([0,,0.04,0.5,0.4,0.6,,,,,,,,,,,,,1,,,,,0.4]);
+	INSTRUMENTS[INSTRUMENT_BEEP] = jsfxr([0,,0.04,0.5,0.4,0.6,,,,,,,,,,,,,1,,,,,0.2]);
 
 	var AUDIO_DEATH = 0;
 	var AUDIO_BG_MUSIC = 1;
@@ -101,16 +101,16 @@
 	var STR_NAME_COLON = 'Name: ';
 	var STR_HINT_COLON = 'Hint: ';
 	var STR_GEMS_COLON = 'Gems: ';
-	var STR_EDIT_HELP_1 = 'Elements:   X=remove  E=set  SPACE=next';
-	var STR_EDIT_HELP_2 = 'Map:        O=fill  P=clear  S=save  L=load';
+	var STR_EDIT_HELP_1 = 'Tile:  X=remove  E=set  SPACE=next';
+	var STR_EDIT_HELP_2 = 'Map:   O=fill  P=clear  S=save  L=load';
 	var STR_EDIT_HELP_3 = 'Gem Target: G+Number+ENTER=set  G+G=autoset';
-	var STR_EDIT_HELP_4 = 'Time Limit: T+Number+ENTER=set (in seconds) T+T=autoset';
+	var STR_EDIT_HELP_4 = 'Time Limit: T+Number+ENTER=set (sec) T+T=autoset';
 	var STR_STATUS_TEXT_GAMEOVER = 'Enter: restart  Esc: menu';
 	var STR_STATUS_TEXT_WIN = 'Win! Press enter';
 	var STR_ERROR_UNABLE_TO_SAVE_MAP = 'Unable to save map.';
 	var STR_HINT_PLEASE_ENTER_NAME = 'Please enter a name';
-	var STR_SAVED_AS_SPACE = 'Saved as ';
-	var STR_MSG_DOOR_OPENED = 'Door was opened!!';
+	var STR_SAVED_AS_SPACE = 'Saved ';
+	var STR_MSG_DOOR_OPENED = 'Door opened!';
 	var STR_DEATH_TIME_UP = 'Time up!';
 	var STR_DEATH_SLAIN = 'Slain!';
 	var STR_DEATH_KILLED = 'Killed!';
@@ -150,8 +150,8 @@
 
 	function Gfx( sprite, x, y, s ) {
 		this._sprite = sprite;
-		this._x = x;
-		this._y = y;
+		this._x = x*SPRITE_TILE_SIZE;
+		this._y = y*SPRITE_TILE_SIZE;
 		this._s = s || SPRITE_TILE_SIZE; // if w is not set, it is defaulted to sprite tile size
 	}
 	Gfx[PROTO]._render = function(screen, destX, destY, shiftX, shiftY, TS) {
@@ -588,10 +588,12 @@
 		if (self._wasFalling) {
 			self._wasFalling = false;
 
+
 			if ( self instanceof Bomb || self instanceof Bombium ) {
 				self._game._createCluster(pos.x, pos.y, ELEMENT_EXPLOSION);
 			}
-			if ( self instanceof Stone || self instanceof Stonium ) {
+
+			if ( self instanceof Stone || self.instanceof instanceof Stonium ) {
 				self._game._audioHandler._play(AUDIO_STONE);
 			}
 		}
@@ -631,11 +633,11 @@
 		var self = this;
 		Entity[PROTO][CONSTRUCTOR].call(self, g, null, x, y, TILE_SIZE, TILE_SIZE);
 
-		self._gfx = new Gfx(g._sprite, 16, 16);
-		self._gfxLeft = [new Gfx(g._sprite, 0, 32), new Gfx(g._sprite, 16, 32)];
-		self._gfxRight = [new Gfx(g._sprite, 0, 48), new Gfx(g._sprite, 16, 48)];
-		self._gfxDown = [new Gfx(g._sprite, 0, 64), new Gfx(g._sprite, 16, 64)];
-		self._gfxUp = [new Gfx(g._sprite, 0, 80), new Gfx(g._sprite, 16, 80)];
+		self._gfx = new Gfx(g._sprite, 1, 1);
+		self._gfxLeft = [new Gfx(g._sprite, 0, 2), new Gfx(g._sprite, 1, 2)];
+		self._gfxRight = [new Gfx(g._sprite, 0, 3), new Gfx(g._sprite, 1, 3)];
+		self._gfxDown = [new Gfx(g._sprite, 0, 4), new Gfx(g._sprite, 1, 4)];
+		self._gfxUp = [new Gfx(g._sprite, 0, 5), new Gfx(g._sprite, 1, 5)];
 
 		self._gemCount = 0;
 		self._reverseHit = false;
@@ -1179,17 +1181,17 @@
 
 		// ruby sound
 		if ( !g._audioHandler._hasSequence(AUDIO_RUBY) ) {
-			g._audioHandler._addSequence(AUDIO_RUBY, new Sequencer({
-				loopSpeed: 100,
-				instruments: INSTRUMENTS,
-				loops: [],
-				song: [
+			g._audioHandler._addSequence(AUDIO_RUBY, new Sequencer([
+				100,
+				INSTRUMENTS,
+				{},
+				[
 					[{n:INSTRUMENT_BEEP,p:1.24}],
 					[{n:INSTRUMENT_BEEP,p:1.3}],
 					[{n:INSTRUMENT_BEEP,p:1.6}]
 				],
-				loop: false
-			}));
+				false
+			]));
 		}
 	}
 	Ruby[PROTO] = ObjCreate(Gem[PROTO]);
@@ -1251,7 +1253,7 @@
 		self._stepsPerTile = TILE_SIZE/OBJECT_SPEED;
 
 		self._gfx = g._elementGraphics[ELEMENT_DOOR];
-		self._gfxOpen = [new Gfx(self._game._sprite, 32, 48), new Gfx(self._game._sprite, 32, 64)];
+		self._gfxOpen = [new Gfx(self._game._sprite, 2, 3), new Gfx(self._game._sprite, 2, 3)];
 	}
 	Door[PROTO] = ObjCreate(Entity[PROTO]);
 	Door[PROTO][CONSTRUCTOR] = Door;
@@ -1348,7 +1350,7 @@
 
 		self._elementGraphics = [];
 
-		self._sprite = new Sprite('sprites.png', function() {
+		self._sprite = new Sprite('i.png', function() {
 
 			self._font = new Font(self._sprite);
 			self._initGraphics();
@@ -1476,51 +1478,51 @@
 			];
 
 			// Fire up a sequencer with all of the above
-			self._audioHandler._addSequence(AUDIO_BG_MUSIC, new Sequencer({
-				loopSpeed: 250, // milliseconds per beat
-				instruments: INSTRUMENTS, // The Audio Elements
-				loops: loops, // Loops
-				song: song, // The actual song
-				loop: true, // Loop over and over
-				buffer: 1.4 // seconds buffer. ~min Chrome lets us have in a background tab
-			}));
+			self._audioHandler._addSequence(AUDIO_BG_MUSIC, new Sequencer([
+				250, // milliseconds per beat
+				INSTRUMENTS, // The Audio Elements
+				loops, // Loops
+				song, // The actual song
+				true, // Loop over and over
+				1.4 // seconds buffer. ~min Chrome lets us have in a background tab
+			]));
 
 			// emerald sound
-			self._audioHandler._add(AUDIO_EXPLOSION, 5, [3,,0.13,0.55,0.5,0.1,,,,,,,,,,0.6,-0.1,-0.12,1,,,,,0.5]);
+			self._audioHandler._add(AUDIO_EXPLOSION, 5, [3,,0.1,0.6,0.5,0.1,,,,,,,,,,0.6,-0.1,-0.1,1,,,,,0.5]);
 			// open door
-			self._audioHandler._add(AUDIO_OPENDOOR, 1, [1,,0.2,,0.48,0.49,,0.24,,,,,,,,0.76,,,1,,,,,0.5]);
+			self._audioHandler._add(AUDIO_OPENDOOR, 1, [1,,0.2,,0.5,0.5,,0.2,,,,,,,,0.8,,,1,,,,,0.5]);
 
 			// stone falls to the ground
-			self._audioHandler._add(AUDIO_STONE, 5, [3,,0.15,0.2,0.05,0.05,,-0.25,,,,,,,,,0.03,-0.2,0.8,,,,,0.5]);
+			self._audioHandler._add(AUDIO_STONE, 5, [3,,0.2,0.2,0.05,0.05,,-0.3,,,,,,,,,0.03,-0.2,0.8,,,,,0.5]);
 
-			self._audioHandler._add(AUDIO_WALK, 1, [3,,0.1,0.05,0.08,0.07,,-0.5,,,,,,,,,,,1,,,0.04,,0.27]);
+			self._audioHandler._add(AUDIO_WALK, 1, [3,,0.1,0.05,0.08,0.07,,-0.5,,,,,,,,,,,1,,,0.04,,0.3]);
 
-			self._audioHandler._add(AUDIO_REVERSE, 2, [2,,0.18,,0.41,0.3,,0.22,,,,,,,,0.7,,,1,,,,,0.27]);
+			self._audioHandler._add(AUDIO_REVERSE, 2, [2,,0.2,,0.4,0.3,,0.2,,,,,,,,0.7,,,1,,,,,0.3]);
 
-			self._audioHandler._add(AUDIO_DEATH, 1, [3,,0.2,0.6,0.44,0.54,,-0.35,,,,,,,,0.34,,,1,,,,,0.5]);
+			self._audioHandler._add(AUDIO_DEATH, 1, [3,,0.2,0.6,0.4,0.5,,-0.4,,,,,,,,0.3,,,1,,,,,0.5]);
 		},
 		_initGraphics: function() {
 			var self = this;
 			self._elementGraphics = {};
 			self._elementGraphics[ELEMENT_EMERALD] = new Gfx(self._sprite, 0, 0);
-			self._elementGraphics[ELEMENT_STONE] = new Gfx(self._sprite, 16, 0);
-			self._elementGraphics[ELEMENT_STONIUM] = new Gfx(self._sprite, 32, 16);
-			self._elementGraphics[ELEMENT_BOMB] = new Gfx(self._sprite, 32, 0);
-			self._elementGraphics[ELEMENT_BOMBIUM] = new Gfx(self._sprite, 64, 64);
-			self._elementGraphics[ELEMENT_EXPLOSION] = new Gfx(self._sprite, 48, 0);
+			self._elementGraphics[ELEMENT_STONE] = new Gfx(self._sprite, 1, 0);
+			self._elementGraphics[ELEMENT_STONIUM] = new Gfx(self._sprite, 2, 1);
+			self._elementGraphics[ELEMENT_BOMB] = new Gfx(self._sprite, 2, 0);
+			self._elementGraphics[ELEMENT_BOMBIUM] = new Gfx(self._sprite, 4, 4);
+			self._elementGraphics[ELEMENT_EXPLOSION] = new Gfx(self._sprite, 3, 0);
 
-			self._elementGraphics[ELEMENT_RUBY] = new Gfx(self._sprite, 0, 16);
+			self._elementGraphics[ELEMENT_RUBY] = new Gfx(self._sprite, 0, 1);
 
-			self._elementGraphics[ELEMENT_DOOR] = new Gfx(self._sprite, 32, 32);
+			self._elementGraphics[ELEMENT_DOOR] = new Gfx(self._sprite, 2, 2);
 
-			self._elementGraphics[ELEMENT_WALL] = new Gfx(self._sprite, 32, 80);
+			self._elementGraphics[ELEMENT_WALL] = new Gfx(self._sprite, 2, 5);
 
-			self._elementGraphics[ENEMY_STRIDER] = new Gfx(self._sprite, 96, 80);
-			self._elementGraphics[ENEMY_NIKI] = new Gfx(self._sprite, 80, 80);
+			self._elementGraphics[ENEMY_STRIDER] = new Gfx(self._sprite, 6, 5);
+			self._elementGraphics[ENEMY_NIKI] = new Gfx(self._sprite, 5, 5);
 			//
-			self._elementGraphics[ELEMENT_GRASS] = new Gfx(self._sprite, 48, 80);
-			self._elementGraphics[ELEMENT_LAVA] = new Gfx(self._sprite, 80, 64);
-			self._elementGraphics[ELEMENT_NULL] = new Gfx(self._sprite, 48, 64);
+			self._elementGraphics[ELEMENT_GRASS] = new Gfx(self._sprite, 3, 5);
+			self._elementGraphics[ELEMENT_LAVA] = new Gfx(self._sprite, 5, 4);
+			self._elementGraphics[ELEMENT_NULL] = new Gfx(self._sprite, 3, 4);
 		},
 		_changeState: function( toState ) {
 			var self = this;
@@ -2620,9 +2622,9 @@
 			var ctx = self._context;
 
 
-			var hudRightElement = new Gfx(self._sprite, 48, 16);
-			var hudLeftElement = new Gfx(self._sprite, 48, 48);
-			var hudCenterElement = new Gfx(self._sprite, 48, 32);
+			var hudRightElement = new Gfx(self._sprite, 3, 1);
+			var hudLeftElement = new Gfx(self._sprite, 3, 3);
+			var hudCenterElement = new Gfx(self._sprite, 3, 2);
 
 			for ( var i = 1; i < VISIBLE_WIDTH-1; i++ ) {
 				hudCenterElement._render(ctx, i*TILE_SIZE, VISIBLE_HEIGHT*TILE_SIZE);
@@ -2766,7 +2768,7 @@
 			//self._renderText('_', TILE_SIZE*3, y+HALF_FONT_SIZE);
 			y-=HALF_FONT_SIZE;
 			// draw player at pos
-			var gfx = new Gfx(self._sprite, 16, 16);
+			var gfx = new Gfx(self._sprite, 1, 1);
 			gfx._render(self._context, TILE_SIZE+HALF_TILE_SIZE, y - ( 3 - self._menuCurrent )*(TILE_SIZE) );
 		},
 
@@ -2849,7 +2851,7 @@
 			];
 			var map;
 			if ( lvl-1 >= maps.length ) {
-				map = {m:[8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,7,8,7,8,7,8,7,7,7,8,7,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,7,8,7,8,7,8,7,8,7,8,7,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,7,8,7,8,7,8,7,7,7,8,7,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,7,8,7,8,7,8,7,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,7,7,7,7,7,8,7,8,8,8,7,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8],g:0,t:0,x:8,y:3}
+				//map = {m:[8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,7,8,7,8,7,8,7,7,7,8,7,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,7,8,7,8,7,8,7,8,7,8,7,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,7,8,7,8,7,8,7,7,7,8,7,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,7,8,7,8,7,8,7,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,7,7,7,7,7,8,7,8,8,8,7,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8],g:0,t:0,x:8,y:3}
 			} else {
 				map = maps[lvl-1];
 			}
