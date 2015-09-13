@@ -101,7 +101,6 @@ function Sequencer(opts){
 
 		var _this = this;
 		var i;
-		var instrument;
 		_this._interval = setInterval(function(){
 			if(!startTime){
 				startTime = ctx.currentTime;

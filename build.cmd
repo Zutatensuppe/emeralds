@@ -1,7 +1,6 @@
 @echo off
 
 
-
 echo;
 echo;
 echo ---------------------------------------
@@ -10,8 +9,8 @@ echo ---------------------------------------
 echo uglifyjs --compress --mangle --mangle-props --mangle-regex="/^_/" --o src/lib/jsfxr.min.js -- src/lib/jsfxr.js
 call uglifyjs --compress --mangle --mangle-props --mangle-regex="/^_/" --o src/lib/jsfxr.min.js -- src/lib/jsfxr.js
 
-echo uglifyjs --compress --mangle --mangle-props --mangle-regex="/^_/" --o src/lib/sequencer.min.js -- src/lib/sequencer.js
-call uglifyjs --compress --mangle --mangle-props --mangle-regex="/^_/" --o src/lib/sequencer.min.js -- src/lib/sequencer.js
+echo uglifyjs --compress --mangle --mangle-props --mangle-regex="/^_/" --o src/lib/seq.min.js -- src/lib/seq.js
+call uglifyjs --compress --mangle --mangle-props --mangle-regex="/^_/" --o src/lib/seq.min.js -- src/lib/seq.js
 
 echo uglifyjs --compress --mangle --mangle-props --mangle-regex="/^_/" --o src/game.min.js -- src/game.js
 call uglifyjs --compress --mangle --mangle-props --mangle-regex="/^_/" --o src/game.min.js -- src/game.js
@@ -25,8 +24,10 @@ echo Creating Zip
 echo ---------------------------------------
 echo rm dist/dist.zip
 call rm dist/dist.zip
-echo 7za a -mm=PPMd -mtc=off -mx9 dist/dist.zip src/game.min.js src/index.html src/sprites.png src/lib/jsfxr.min.js src/lib/sequencer.min.js
-call 7za a -mm=PPMd -mtc=off -mx9 dist/dist.zip src/game.min.js src/index.html src/sprites.png src/lib/jsfxr.min.js src/lib/sequencer.min.js
+call cd src
+echo 7za a -mm=PPMd -mtc=off -mx9 ../dist/dist.zip game.min.js index.html sprites.png lib/jsfxr.min.js lib/seq.min.js
+call 7za a -mm=PPMd -mtc=off -mx9 ../dist/dist.zip game.min.js index.html sprites.png lib/jsfxr.min.js lib/seq.min.js
+call cd ..
 
 
 
